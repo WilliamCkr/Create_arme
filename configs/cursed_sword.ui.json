@@ -7,6 +7,7 @@
   "inputModel": "input/cursed_sword.glb",
   "sf3dOutputModel": "output/sf3d_cursed_sword/0/mesh.glb",
   "outputDir": "output/cursed_sword",
+  "pipelineMode": "hunyuan_mesh_blender_texture",
   "foregroundRatio": 0.85,
   "textureResolution": 4096,
   "remeshOption": "none",
@@ -41,6 +42,14 @@
     "textureResolution": 1024,
     "remeshOption": "none",
     "targetVertexCount": -1
+  },
+  "hunyuan": {
+    "meshProvider": "placeholder",
+    "runnerCommand": "",
+    "runnerArgs": [],
+    "outputDir": "output/hunyuan_cursed_sword",
+    "textureBakeResolution": 2048,
+    "projectionMode": "smart_uv"
   },
   "sf3dGeneration": {
     "foregroundRatio": 0.85,

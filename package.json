@@ -10,6 +10,7 @@
     "atlas": "node src/cli/build-atlas.mjs",
     "validate": "node src/cli/validate-manifest.mjs",
     "export:arena": "node src/cli/export-arena-package.mjs",
+    "hunyuan:pipeline": "node src/cli/run-hunyuan-pipeline.mjs",
     "forge:example": "npm run check && npm run placeholder && npm run atlas && npm run validate",
     "ui": "node src/ui/server.mjs",
     "ui:server": "node src/ui/server.mjs",

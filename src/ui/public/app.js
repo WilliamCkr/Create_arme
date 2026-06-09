@@ -24,6 +24,17 @@ const PRESETS = {
   }
 };
 
+const PIPELINE_MODES = {
+  sf3d_full: {
+    label: "SF3D Full",
+    description: "Existing SF3D geometry + texture generation"
+  },
+  hunyuan_mesh_blender_texture: {
+    label: "Hunyuan Mesh + Source Texture",
+    description: "Mesh from Hunyuan3D, texture from source image in Blender"
+  }
+};
+
 const STEP_META = [
   {
     key: "source",
@@ -102,6 +113,25 @@ function parseAngles(text) {
     .split(/[\s,]+/)
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value));
+}
+
+function parseList(text) {
+  return String(text ?? "")
+    .split(/[\s,\n]+/)
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function currentPipelineMode() {
+  return state.formConfig?.pipelineMode ?? state.status?.config?.pipelineMode ?? "sf3d_full";
+}
+
+function pipelineModeMeta(mode = currentPipelineMode()) {
+  return PIPELINE_MODES[mode] ?? PIPELINE_MODES.sf3d_full;
+}
+
+function isHunyuanPipeline() {
+  return currentPipelineMode() === "hunyuan_mesh_blender_texture";
 }
 
 function deepClone(value) {
@@ -283,13 +313,27 @@ function updateDraftFromStepInputs() {
   const draft = formConfigDraft();
 
   if (state.currentStepIndex === 1) {
-    draft.sf3d = {
-      ...(draft.sf3d ?? {}),
-      foregroundRatio: Number(el.advancedBody.querySelector("#foregroundRatioInput")?.value ?? draft.sf3d?.foregroundRatio ?? 0.85),
-      textureResolution: Number(el.advancedBody.querySelector("#textureResolutionInput")?.value ?? draft.sf3d?.textureResolution ?? 2048),
-      remeshOption: el.advancedBody.querySelector("#remeshOptionInput")?.value ?? draft.sf3d?.remeshOption ?? "none",
-      targetVertexCount: Number(el.advancedBody.querySelector("#targetVertexCountInput")?.value ?? draft.sf3d?.targetVertexCount ?? -1)
-    };
+    const pipelineMode = el.stepOptions.querySelector("#pipelineModeInput")?.value ?? draft.pipelineMode ?? "sf3d_full";
+    draft.pipelineMode = pipelineMode;
+    if (pipelineMode === "hunyuan_mesh_blender_texture") {
+      draft.hunyuan = {
+        ...(draft.hunyuan ?? {}),
+        meshProvider: el.advancedBody.querySelector("#hunyuanMeshProviderInput")?.value ?? draft.hunyuan?.meshProvider ?? "placeholder",
+        runnerCommand: el.advancedBody.querySelector("#hunyuanRunnerCommandInput")?.value ?? draft.hunyuan?.runnerCommand ?? "",
+        runnerArgs: parseList(el.advancedBody.querySelector("#hunyuanRunnerArgsInput")?.value ?? (draft.hunyuan?.runnerArgs ?? []).join("\n")),
+        outputDir: el.advancedBody.querySelector("#hunyuanOutputDirInput")?.value ?? draft.hunyuan?.outputDir ?? "output/hunyuan_cursed_sword",
+        textureBakeResolution: Number(el.advancedBody.querySelector("#hunyuanTextureBakeResolutionInput")?.value ?? draft.hunyuan?.textureBakeResolution ?? 2048),
+        projectionMode: el.advancedBody.querySelector("#hunyuanProjectionModeInput")?.value ?? draft.hunyuan?.projectionMode ?? "smart_uv"
+      };
+    } else {
+      draft.sf3d = {
+        ...(draft.sf3d ?? {}),
+        foregroundRatio: Number(el.advancedBody.querySelector("#foregroundRatioInput")?.value ?? draft.sf3d?.foregroundRatio ?? 0.85),
+        textureResolution: Number(el.advancedBody.querySelector("#textureResolutionInput")?.value ?? draft.sf3d?.textureResolution ?? 2048),
+        remeshOption: el.advancedBody.querySelector("#remeshOptionInput")?.value ?? draft.sf3d?.remeshOption ?? "none",
+        targetVertexCount: Number(el.advancedBody.querySelector("#targetVertexCountInput")?.value ?? draft.sf3d?.targetVertexCount ?? -1)
+      };
+    }
   } else if (state.currentStepIndex === 2) {
     draft.renderMode = el.advancedBody.querySelector("#renderModeInput")?.value ?? draft.renderMode ?? "turntable_3d";
     draft.angles = parseAngles(el.advancedBody.querySelector("#anglesInput")?.value ?? (draft.angles ?? DEFAULT_ANGLES).join(", "));
@@ -410,6 +454,9 @@ function renderPreview() {
   const atlas = atlasFile();
   const exportInfo = exportPackage();
   const step = state.currentStepIndex;
+  const pipelineMode = currentPipelineMode();
+  const hunyuanTexture = files().hunyuanBakeTexture;
+  const hunyuanTexturedModel = files().hunyuanTexturedModel;
   let html = "";
   let caption = "";
 
@@ -436,7 +483,24 @@ function renderPreview() {
       caption = "The source image must exist before the workflow can continue.";
     }
   } else if (step === 1) {
-    if (model?.exists) {
+    if (pipelineMode === "hunyuan_mesh_blender_texture" && model?.exists) {
+      html = `
+        <div class="preview-shell">
+          ${hunyuanTexture?.exists ? `<img class="preview-image" src="${escapeHtml(hunyuanTexture.url)}" alt="Hunyuan baked texture preview" />` : ""}
+          <div class="preview-card">
+            <h3>3D model ready</h3>
+            <p><strong>Pipeline</strong>: Hunyuan mesh + source texture</p>
+            <p><strong>Active model</strong></p>
+            <p>${escapeHtml(model.path)}</p>
+            <p>${escapeHtml(formatBytes(model.size))}</p>
+            <p><strong>Textured GLB</strong></p>
+            <p>${escapeHtml(hunyuanTexturedModel?.path ?? "output/hunyuan_cursed_sword/textured.glb")}</p>
+            <p>The mesh comes from Hunyuan3D and the visible texture is projected from the source image in Blender.</p>
+          </div>
+        </div>
+      `;
+      caption = "This pipeline uses a Hunyuan mesh and reprojects the source image before the atlas stage.";
+    } else if (model?.exists) {
       html = `
         <div class="preview-card">
           <h3>3D model ready</h3>
@@ -451,10 +515,14 @@ function renderPreview() {
       html = `
         <div class="preview-card">
           <h3>Generate the active model</h3>
-          <p>Run SF3D from the source image to create the model used by later steps.</p>
+          <p>${escapeHtml(pipelineMode === "hunyuan_mesh_blender_texture"
+            ? "Run Hunyuan3D + Blender to create the textured model used by later steps."
+            : "Run SF3D from the source image to create the model used by later steps.")}</p>
         </div>
       `;
-      caption = "SF3D output is auto-copied to input/cursed_sword.glb when generation succeeds.";
+      caption = pipelineMode === "hunyuan_mesh_blender_texture"
+        ? "The generated textured GLB is copied into input/cursed_sword.glb automatically."
+        : "SF3D output is auto-copied to input/cursed_sword.glb when generation succeeds.";
     }
   } else if (step === 2) {
     if (atlas?.exists) {
@@ -512,6 +580,10 @@ function renderStepOptions() {
   const model = inputModelFile();
   const exportInfo = exportPackage();
   const unlocked = highestUnlockedStep();
+  const pipelineMode = currentPipelineMode();
+  const pipelineMeta = pipelineModeMeta(pipelineMode);
+  const hunyuanMeshStage = state.status?.stages?.hunyuanMesh ?? {};
+  const hunyuanBakeStage = state.status?.stages?.textureBake ?? {};
 
   if (state.currentStepIndex === 0) {
     el.stepOptions.innerHTML = `
@@ -525,19 +597,24 @@ function renderStepOptions() {
       </div>
     `;
   } else if (state.currentStepIndex === 1) {
-    const cuda = state.status?.tools?.sf3d?.cuda ?? {};
     const activeModel = model?.exists ? model : null;
     el.stepOptions.innerHTML = `
       <div class="status-grid">
-        <div>Source</div><div>${escapeHtml(sourceReady() ? "Ready" : "Missing")}</div>
+        <div>Pipeline</div><div>${escapeHtml(pipelineMeta.label)}</div>
         <div>Active model</div><div>${escapeHtml(activeModel?.path ?? "n/a")}</div>
         <div>Size</div><div>${escapeHtml(activeModel ? formatBytes(activeModel.size) : "n/a")}</div>
-        <div>SF3D env</div><div>${escapeHtml(state.status?.tools?.sf3d?.exists ? "Ready" : "Missing")}</div>
-        <div>CUDA</div><div>${escapeHtml(cuda.available === null ? "Unknown" : (cuda.available ? `Available${cuda.deviceName ? ` - ${cuda.deviceName}` : ""}` : "Unavailable"))}</div>
-        <div>HF Access</div><div>${escapeHtml(state.status?.tools?.huggingFace?.status ?? "Unknown")}</div>
+        <div>Mesh stage</div><div>${escapeHtml(isHunyuanPipeline() ? (hunyuanMeshStage.state ?? "Not checked") : (state.status?.tools?.sf3d?.exists ? "Ready" : "Missing"))}</div>
+        <div>Texture bake</div><div>${escapeHtml(isHunyuanPipeline() ? (hunyuanBakeStage.state ?? "Not checked") : "SF3D texture generation")}</div>
       </div>
-      <button id="runSf3dButton" type="button" ${state.busy || !sourceReady() ? "disabled" : ""}>Generate 3D Model</button>
-      <div class="subtle">The generated GLB is copied into the active model automatically.</div>
+      <label>
+        Pipeline
+        <select id="pipelineModeInput">
+          <option value="sf3d_full" ${pipelineMode === "sf3d_full" ? "selected" : ""}>${escapeHtml(PIPELINE_MODES.sf3d_full.label)}</option>
+          <option value="hunyuan_mesh_blender_texture" ${pipelineMode === "hunyuan_mesh_blender_texture" ? "selected" : ""}>${escapeHtml(PIPELINE_MODES.hunyuan_mesh_blender_texture.label)}</option>
+        </select>
+      </label>
+      <button id="runModelButton" type="button" ${state.busy || !sourceReady() ? "disabled" : ""}>Generate 3D Model</button>
+      <div class="subtle">${escapeHtml(pipelineMeta.description)}</div>
     `;
   } else if (state.currentStepIndex === 2) {
     const draft = state.formConfig ?? state.status?.config ?? {};
@@ -587,6 +664,8 @@ function renderAdvancedPanels() {
   const sf3dTool = state.status?.tools?.sf3d ?? {};
   const cuda = sf3dTool.cuda ?? {};
   const sf3d = draft.sf3d ?? {};
+  const hunyuan = draft.hunyuan ?? {};
+  const pipelineMode = currentPipelineMode();
   const camera = draft.camera ?? {};
   const lighting = draft.lighting ?? {};
   const materialOverride = draft.materialOverride ?? {};
@@ -647,6 +726,60 @@ function renderAdvancedPanels() {
       <div class="advanced-actions">
         <button type="button" data-action="run-sf3d" ${state.busy || !sourceReady() ? "disabled" : ""}>Generate 3D Model</button>
         <button class="secondary" type="button" data-action="copy-glb">Copy GLB manually</button>
+      </div>
+    </section>
+  `;
+
+  const hunyuanSummaryHtml = `
+    <section class="advanced-group">
+      <div class="panel-heading compact">
+        <h3>Hunyuan Settings</h3>
+      </div>
+      <div class="status-grid compact-grid">
+        <div>Mesh provider</div><div>${escapeHtml(hunyuan.meshProvider === "external" ? "External runner" : "Placeholder mesh")}</div>
+        <div>Mesh stage</div><div>${escapeHtml(state.status?.stages?.hunyuanMesh?.state ?? "Not checked")}</div>
+        <div>Texture bake</div><div>${escapeHtml(state.status?.stages?.textureBake?.state ?? "Not checked")}</div>
+        <div>Active model</div><div>${escapeHtml(displayPath(model?.path ?? "input/cursed_sword.glb"))}</div>
+        <div>Textured GLB</div><div>${escapeHtml(displayPath(state.status?.files?.hunyuanTexturedModel?.path ?? "output/hunyuan_cursed_sword/textured.glb"))}</div>
+        <div>Output dir</div><div>${escapeHtml(displayPath(hunyuan.outputDir ?? "output/hunyuan_cursed_sword"))}</div>
+      </div>
+      <div class="form-grid">
+        <label>
+          meshProvider
+          <select id="hunyuanMeshProviderInput">
+            <option value="placeholder" ${hunyuan.meshProvider !== "external" ? "selected" : ""}>placeholder</option>
+            <option value="external" ${hunyuan.meshProvider === "external" ? "selected" : ""}>external</option>
+          </select>
+        </label>
+        <label>
+          outputDir
+          <input id="hunyuanOutputDirInput" type="text" value="${escapeHtml(hunyuan.outputDir ?? "output/hunyuan_cursed_sword")}" />
+        </label>
+        <label>
+          textureBakeResolution
+          <input id="hunyuanTextureBakeResolutionInput" type="number" min="256" step="1" value="${escapeHtml(hunyuan.textureBakeResolution ?? 2048)}" />
+        </label>
+        <label>
+          projectionMode
+          <select id="hunyuanProjectionModeInput">
+            <option value="smart_uv" ${hunyuan.projectionMode !== "project_image" ? "selected" : ""}>smart_uv</option>
+            <option value="project_image" ${hunyuan.projectionMode === "project_image" ? "selected" : ""}>project_image</option>
+          </select>
+        </label>
+      </div>
+      <label>
+        runnerCommand
+        <input id="hunyuanRunnerCommandInput" type="text" value="${escapeHtml(hunyuan.runnerCommand ?? "")}" placeholder="Hunyuan runner command" />
+      </label>
+      <label>
+        runnerArgs
+        <textarea id="hunyuanRunnerArgsInput" rows="3" placeholder="One argument per line">${escapeHtml((hunyuan.runnerArgs ?? []).join("\n"))}</textarea>
+      </label>
+      <div class="subtle">Use an external runner when you have Hunyuan3D installed locally. Otherwise this environment falls back to a Blender placeholder mesh.</div>
+      <div id="hunyuanResult" class="subtle">${escapeHtml(state.status?.lastHunyuan?.message ?? "Ready to generate the 3D model.")}</div>
+      <div class="advanced-actions">
+        <button class="secondary" type="button" data-action="copy-active-model-path">Copy active model path</button>
+        <button class="secondary" type="button" data-action="copy-hunyuan-output-path">Copy output path</button>
       </div>
     </section>
   `;
@@ -771,7 +904,7 @@ function renderAdvancedPanels() {
   if (state.currentStepIndex === 0) {
     html = sourceSummaryHtml;
   } else if (state.currentStepIndex === 1) {
-    html = sf3dSummaryHtml;
+    html = pipelineMode === "hunyuan_mesh_blender_texture" ? hunyuanSummaryHtml : sf3dSummaryHtml;
   } else if (state.currentStepIndex === 2) {
     html = atlasSummaryHtml;
   } else {
@@ -935,17 +1068,20 @@ function bindStepOptionActions(unlockedStep) {
     useImageButton.addEventListener("click", () => goToStep(1));
   }
 
-  const runSf3dButton = el.stepOptions.querySelector("#runSf3dButton");
-  if (runSf3dButton) {
-    runSf3dButton.addEventListener("click", () => runAction("/api/run-sf3d", currentConfigFromForm(), "Generate 3D Model", (response) => {
-      if (response.activeModelPath) {
-        const result = el.advancedBody.querySelector("#sf3dResult");
-        if (result) {
-          result.textContent = `Active model: ${response.activeModelPath}`;
+  const runModelButton = el.stepOptions.querySelector("#runModelButton");
+  if (runModelButton) {
+    runModelButton.addEventListener("click", () => {
+      const endpoint = currentPipelineMode() === "hunyuan_mesh_blender_texture" ? "/api/run-hunyuan-pipeline" : "/api/run-sf3d";
+      runAction(endpoint, currentConfigFromForm(), "Generate 3D Model", (response) => {
+        if (response.activeModelPath) {
+          const result = el.advancedBody.querySelector("#sf3dResult") ?? el.advancedBody.querySelector("#hunyuanResult");
+          if (result) {
+            result.textContent = `Active model: ${response.activeModelPath}`;
+          }
         }
-      }
-      goToStep(2);
-    }));
+        goToStep(2);
+      });
+    });
   }
 
   const generateAtlasButton = el.stepOptions.querySelector("#generateAtlasButton");
@@ -975,6 +1111,15 @@ function bindStepOptionActions(unlockedStep) {
     exportArenaButton.addEventListener("click", () => runAction("/api/export-arena-package", currentConfigFromForm(), "Export Arena Package", () => {
       goToStep(3);
     }));
+  }
+
+  const pipelineModeInput = el.stepOptions.querySelector("#pipelineModeInput");
+  if (pipelineModeInput) {
+    pipelineModeInput.addEventListener("change", () => {
+      updateDraftFromStepInputs();
+      queueSaveConfig();
+      renderAll();
+    });
   }
 
   const copyExportPathButton = el.stepOptions.querySelector("#copyExportPathButton");
@@ -1048,6 +1193,28 @@ function wireAdvancedInteractions() {
 
     if (action === "copy-glb") {
       await runAction("/api/copy-glb", null, "Copy GLB manually");
+      return;
+    }
+
+    if (action === "copy-active-model-path") {
+      const pathValue = state.status?.paths?.inputModel ?? "input/cursed_sword.glb";
+      try {
+        await navigator.clipboard.writeText(pathValue);
+        setSaveState(`Copied ${pathValue}`);
+      } catch {
+        appendLocalLog("warn", "ui", `Could not copy path: ${pathValue}`);
+      }
+      return;
+    }
+
+    if (action === "copy-hunyuan-output-path") {
+      const pathValue = state.status?.paths?.hunyuanOutputDir ?? "output/hunyuan_cursed_sword";
+      try {
+        await navigator.clipboard.writeText(pathValue);
+        setSaveState(`Copied ${pathValue}`);
+      } catch {
+        appendLocalLog("warn", "ui", `Could not copy path: ${pathValue}`);
+      }
       return;
     }
 

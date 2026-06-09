@@ -33,6 +33,25 @@ This first version focuses on the external tooling foundation:
 
 The placeholder path lets you test the atlas and manifest pipeline without a real 3D model.
 
+## Pipeline Modes
+
+The project now supports two explicit 3D generation modes:
+
+1. `sf3d_full`
+2. `hunyuan_mesh_blender_texture`
+
+`sf3d_full` keeps the original SF3D-based flow in place.
+
+`hunyuan_mesh_blender_texture` is the experimental path for the newer workflow:
+
+1. generate a mesh with Hunyuan3D
+2. import that mesh into Blender
+3. project the source image texture onto the mesh
+4. export a textured intermediate GLB
+5. continue with the existing multi-angle render, atlas, and manifest pipeline
+
+When a local Hunyuan runner is not yet connected, the pipeline uses a clean Blender placeholder mesh so the rest of the workflow can still be tested end to end.
+
 ## Quick Start
 
 ```bash
@@ -67,7 +86,9 @@ npm run ui:dev
 The UI is local-only and uses the existing project files directly. It can:
 
 - inspect the source image and GLB status
+- choose between SF3D and Hunyuan pipeline modes
 - run SF3D from the local Python environment
+- run the experimental Hunyuan mesh + Blender texture pipeline
 - copy the generated GLB into `input/cursed_sword.glb`
 - render frames in either `turntable_3d` or `gameplay_2d` mode
 - build the atlas
@@ -94,6 +115,27 @@ The script will:
 - render one frame per configured angle
 - write a render report
 
+## Hunyuan Texture Projection
+
+The experimental Hunyuan branch uses dedicated Blender scripts:
+
+- `blender/generate_hunyuan_proxy_mesh.py`
+- `blender/project_texture_to_mesh.py`
+
+The mesh runner can be connected later through the dedicated CLI/config fields:
+
+- `hunyuan.meshProvider = "external"`
+- `hunyuan.runnerCommand`
+- `hunyuan.runnerArgs`
+
+If no external runner is available, the placeholder mesh keeps the pipeline usable.
+
+Run the experimental flow with:
+
+```bash
+npm run hunyuan:pipeline
+```
+
 ## Expected Outputs
 
 For the example config, the main outputs are written under:
@@ -107,14 +149,20 @@ The SF3D stage writes its intermediate GLB to:
 
 - `output/sf3d_cursed_sword/0/mesh.glb`
 
+The Hunyuan experimental stage writes its intermediate files to:
+
+- `output/hunyuan_cursed_sword/mesh.glb`
+- `output/hunyuan_cursed_sword/textured.glb`
+- `output/hunyuan_cursed_sword/baked-texture.png`
+- `output/hunyuan_cursed_sword/hunyuan-pipeline-report.json`
+
 ## Future Roadmap
 
-1. SF3D local generation
-2. Hunyuan mesh comparison
-3. texture projection / baking
-4. material and HDR correction
-5. automatic angle atlas generation
-6. Arena Bloodline importer
+1. Hunyuan local runner integration
+2. texture projection / baking tuning
+3. material and HDR correction
+4. automatic angle atlas generation
+5. Arena Bloodline importer
 
 ## Notes
 

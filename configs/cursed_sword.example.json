@@ -6,9 +6,18 @@
   "inputModel": "input/cursed_sword.glb",
   "sourceTexture": "input/cursed_sword_source.png",
   "outputDir": "output/cursed_sword",
+  "pipelineMode": "sf3d_full",
   "angles": [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330],
   "frameSize": { "width": 512, "height": 512 },
   "atlas": { "columns": 4, "rows": 3 },
+  "hunyuan": {
+    "meshProvider": "placeholder",
+    "runnerCommand": "",
+    "runnerArgs": [],
+    "outputDir": "output/hunyuan_cursed_sword",
+    "textureBakeResolution": 2048,
+    "projectionMode": "smart_uv"
+  },
   "camera": {
     "mode": "orthographic",
     "orthographicScale": 3.0
@@ -36,4 +45,3 @@
     "mode": "center"
   }
 }
-
