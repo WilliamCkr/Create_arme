@@ -1,0 +1,63 @@
+
+.aof-step2-glb-viewer {
+  width: 100%;
+  min-height: 560px;
+  border: 1px solid rgba(125, 203, 255, 0.22);
+  border-radius: 18px;
+  overflow: hidden;
+  background:
+    linear-gradient(45deg, rgba(255,255,255,.035) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255,255,255,.035) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255,255,255,.035) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255,255,255,.035) 75%),
+    #101722;
+  background-size: 28px 28px;
+  background-position: 0 0, 0 14px, 14px -14px, -14px 0px;
+  box-shadow: inset 0 0 60px rgba(0,0,0,.35);
+}
+
+.aof-step2-glb-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(125, 203, 255, 0.16);
+  background: rgba(8, 13, 22, 0.86);
+}
+
+.aof-step2-glb-title {
+  font-weight: 800;
+  color: #eaf4ff;
+  margin-right: auto;
+}
+
+.aof-step2-glb-status {
+  color: #9aabc0;
+  font-size: 12px;
+}
+
+.aof-step2-glb-button {
+  border: 1px solid rgba(135, 204, 255, 0.22);
+  color: #eaf4ff;
+  background: rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.aof-step2-glb-button:hover {
+  background: rgba(125, 203, 255, 0.14);
+}
+
+.aof-step2-glb-model {
+  display: block;
+  width: 100%;
+  height: 540px;
+  background: transparent;
+}
+
+.aof-step2-glb-fallback {
+  padding: 28px;
+  color: #ffb4b4;
+  font-weight: 800;
+}

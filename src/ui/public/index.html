@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arena Object Forge</title>
+    <link rel="stylesheet" href="./styles.css" />\n  <script type="importmap">{"imports":{"three":"/vendor/three/three.module.js"}}</script>\n  <script type="importmap">{"imports":{"three":"/vendor/three/three.module.js"}}</script>\n  <script type="module" src="/vendor/model-viewer.min.js"></script>\n\n\n  <link rel="stylesheet" href="/aof-preview-manager-v2.css?v=3-no-reset">\n</head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="title-block">
+          <div class="eyebrow">Arena Object Forge</div>
+          <h1>Weapon Workflow</h1>
+          <p id="globalStatusLine">Loading workflow state...</p>
+        </div>
+        <div class="topbar-actions">
+          <span id="currentStepBadge" class="badge">Step 1 of 4</span>
+          <span id="connectionState" class="badge">Connecting</span>
+          <span id="saveState" class="badge subtle">Idle</span>
+          <button id="refreshButton" class="secondary" type="button">Refresh</button>
+        </div>
+      </header>
+
+      <main class="workflow-layout">
+        <aside class="panel step-rail">
+          <div class="panel-heading">
+            <h2>Steps</h2>
+            <span id="workflowProgress" class="subtle">1 / 4</span>
+          </div>
+          <div id="stepList" class="step-list"></div>
+        </aside>
+
+        <section class="workflow-center">
+          <section class="panel preview-panel">
+            <div class="panel-heading">
+              <h2 id="currentStepTitle">Source Image</h2>
+              <span id="currentStepMeta" class="subtle"></span>
+            </div>
+            <div id="stepPreview" class="step-preview checkerboard"></div>
+            <div id="stepCaption" class="subtle step-caption"></div>
+          </section>
+        </section>
+
+        <aside class="workflow-right">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Options</h2>
+              <span id="stepOptionHint" class="subtle"></span>
+            </div>
+            <div id="stepOptions"></div>
+            <div class="workflow-nav">
+              <button id="backButton" class="secondary" type="button">Back</button>
+              <button id="nextButton" type="button">Next</button>
+            </div>
+          </section>
+
+          <details class="panel advanced-panel">
+            <summary>Advanced Tools</summary>
+            <div id="advancedToolsBody" class="advanced-body"></div>
+          </details>
+        </aside>
+      </main>
+
+      <details class="panel logs-panel" open>
+        <summary>Logs</summary>
+        <pre id="logOutput" class="code-view log-view"></pre>
+      </details>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+\n\n\n  <script src="/aof-preview-manager-v2.js?v=3-no-reset"></script>\n</body>
+</html>

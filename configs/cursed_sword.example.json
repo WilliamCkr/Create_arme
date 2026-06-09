@@ -1,0 +1,39 @@
+{
+  "id": "cursed_sword",
+  "name": "Cursed Sword",
+  "kind": "weapon",
+  "weaponType": "two_handed_sword",
+  "inputModel": "input/cursed_sword.glb",
+  "sourceTexture": "input/cursed_sword_source.png",
+  "outputDir": "output/cursed_sword",
+  "angles": [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330],
+  "frameSize": { "width": 512, "height": 512 },
+  "atlas": { "columns": 4, "rows": 3 },
+  "camera": {
+    "mode": "orthographic",
+    "orthographicScale": 3.0
+  },
+  "render": {
+    "engine": "BLENDER_EEVEE_NEXT",
+    "resolution": 512,
+    "samples": 64,
+    "transparentBackground": true
+  },
+  "materialOverride": {
+    "enabled": true,
+    "metallic": 0.15,
+    "roughness": 0.82,
+    "specular": 0.25,
+    "clearcoat": 0
+  },
+  "lighting": {
+    "mode": "studio",
+    "strength": 0.8
+  },
+  "pivot": {
+    "x": 256,
+    "y": 256,
+    "mode": "center"
+  }
+}
+
