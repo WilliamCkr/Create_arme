@@ -1,0 +1,6 @@
+
+> arena-object-forge@0.1.0 ui
+> node src/ui/server.mjs
+
+Arena Object Forge UI is ready at http://127.0.0.1:3000
+UI config: configs\cursed_sword.ui.json

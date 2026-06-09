@@ -1,278 +1,315 @@
-"""Project and bake source-image texture onto a mesh, then export a GLB."""
-
-from __future__ import annotations
-
+#!/usr/bin/env python3
 import argparse
 import json
-import math
-import shutil
 import sys
 from pathlib import Path
 
 import bpy
-import mathutils
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Project source texture onto a mesh and export a textured GLB.")
-    parser.add_argument("--mesh", required=True, help="Path to the input mesh GLB/GLTF/OBJ.")
-    parser.add_argument("--source-image", required=True, help="Path to the source image used as the visible texture.")
-    parser.add_argument("--output-glb", required=True, help="Path for the textured GLB to write.")
-    parser.add_argument("--output-texture", required=True, help="Path for the baked texture PNG.")
-    parser.add_argument("--output-report", required=True, help="Path for the JSON bake report.")
-    parser.add_argument("--bake-resolution", type=int, default=2048, help="Bake image resolution.")
-    parser.add_argument("--projection-mode", default="smart_uv", help="UV projection mode label to record in the report.")
-    raw_args = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
-    return parser.parse_args(raw_args)
+def parse_args():
+    argv = sys.argv
+    if "--" in argv:
+        argv = argv[argv.index("--") + 1 :]
+    else:
+        argv = []
+
+    parser = argparse.ArgumentParser(description="Project a source texture onto a mesh and export a textured GLB.")
+    parser.add_argument("--mesh", required=True)
+    parser.add_argument("--source-image", required=True)
+    parser.add_argument("--output-glb", required=True)
+    parser.add_argument("--output-texture", required=True)
+    parser.add_argument("--output-report", required=True)
+    parser.add_argument("--bake-resolution", type=int, default=2048)
+    parser.add_argument("--projection-mode", default="smart_uv")
+    return parser.parse_args(argv)
 
 
-def fail(message: str) -> None:
-    raise RuntimeError(message)
-
-
-def path_or_fail(path_value: str, label: str) -> Path:
-    file_path = Path(path_value).resolve()
-    if not file_path.exists():
-        fail(f"{label} not found: {file_path}")
-    return file_path
-
-
-def clear_scene() -> None:
+def clear_scene():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
-    for block in list(bpy.data.meshes):
-        if block.users == 0:
-            bpy.data.meshes.remove(block)
-    for block in list(bpy.data.materials):
-        if block.users == 0:
-            bpy.data.materials.remove(block)
-    for block in list(bpy.data.images):
-        if block.users == 0:
-            bpy.data.images.remove(block)
+
+    for data_block_collection in (
+        bpy.data.meshes,
+        bpy.data.materials,
+        bpy.data.images,
+        bpy.data.textures,
+        bpy.data.cameras,
+        bpy.data.lights,
+    ):
+        for block in list(data_block_collection):
+            if block.users == 0:
+                data_block_collection.remove(block)
 
 
-def import_model(model_path: Path) -> list[bpy.types.Object]:
-    extension = model_path.suffix.lower()
-    before = set(bpy.data.objects)
-
-    if extension in {".glb", ".gltf"}:
-        bpy.ops.import_scene.gltf(filepath=str(model_path))
-    elif extension == ".obj":
-        if hasattr(bpy.ops.wm, "obj_import"):
-            bpy.ops.wm.obj_import(filepath=str(model_path))
-        else:
-            bpy.ops.import_scene.obj(filepath=str(model_path))
+def import_mesh(mesh_path: Path):
+    suffix = mesh_path.suffix.lower()
+    if suffix in (".glb", ".gltf"):
+        bpy.ops.import_scene.gltf(filepath=str(mesh_path))
     else:
-        fail(f"Unsupported mesh format: {model_path.suffix}")
+        raise RuntimeError(f"Unsupported mesh format: {mesh_path}")
 
-    imported = [obj for obj in bpy.data.objects if obj not in before]
-    mesh_objects = [obj for obj in imported if obj.type == "MESH"]
+    mesh_objects = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
     if not mesh_objects:
-        fail("No mesh objects were imported.")
+        raise RuntimeError("No mesh objects were imported from the GLB.")
     return mesh_objects
 
 
-def join_meshes(mesh_objects: list[bpy.types.Object]) -> bpy.types.Object:
-    if len(mesh_objects) == 1:
-        return mesh_objects[0]
+def apply_object_transforms(mesh_objects):
     bpy.ops.object.select_all(action="DESELECT")
     for obj in mesh_objects:
         obj.select_set(True)
     bpy.context.view_layer.objects.active = mesh_objects[0]
-    bpy.ops.object.join()
-    joined = bpy.context.view_layer.objects.active
-    if joined is None or joined.type != "MESH":
-        fail("Could not join imported mesh objects.")
-    return joined
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
 
 
-def world_bounds(objects: list[bpy.types.Object]):
-    corners = []
-    for obj in objects:
-        for corner in obj.bound_box:
-            world_corner = obj.matrix_world @ mathutils.Vector(corner)
-            corners.append(world_corner)
-    min_corner = mathutils.Vector((min(v.x for v in corners), min(v.y for v in corners), min(v.z for v in corners)))
-    max_corner = mathutils.Vector((max(v.x for v in corners), max(v.y for v in corners), max(v.z for v in corners)))
-    return min_corner, max_corner
+def compute_world_bounds(mesh_objects):
+    mins = [float("inf"), float("inf"), float("inf")]
+    maxs = [float("-inf"), float("-inf"), float("-inf")]
+
+    for obj in mesh_objects:
+        for vertex in obj.data.vertices:
+            co = obj.matrix_world @ vertex.co
+            for i in range(3):
+                mins[i] = min(mins[i], co[i])
+                maxs[i] = max(maxs[i], co[i])
+
+    extents = [maxs[i] - mins[i] for i in range(3)]
+    axis_order = sorted(range(3), key=lambda i: extents[i], reverse=True)
+    v_axis = axis_order[0]  # longest axis -> vertical
+    u_axis = axis_order[1]  # second longest -> horizontal
+    depth_axis = axis_order[2]
+
+    return {
+        "mins": mins,
+        "maxs": maxs,
+        "extents": extents,
+        "u_axis": u_axis,
+        "v_axis": v_axis,
+        "depth_axis": depth_axis,
+    }
 
 
-def center_and_normalize(objects: list[bpy.types.Object], target_size: float = 2.0) -> bpy.types.Object:
-    min_corner, max_corner = world_bounds(objects)
-    center = (min_corner + max_corner) / 2.0
-    dimensions = max_corner - min_corner
-    largest_dimension = max(dimensions.x, dimensions.y, dimensions.z, 0.0001)
-    scale = target_size / largest_dimension
+def clean_source_image(source_path: Path):
+    src = bpy.data.images.load(str(source_path), check_existing=False)
+    src.colorspace_settings.name = "sRGB"
 
-    root = bpy.data.objects.new("HunyuanRoot", None)
-    bpy.context.collection.objects.link(root)
+    width, height = src.size[0], src.size[1]
+    src_pixels = list(src.pixels[:])
 
-    for obj in objects:
-        obj.parent = root
-        obj.matrix_parent_inverse = root.matrix_world.inverted()
+    has_useful_alpha = False
+    for i in range(3, len(src_pixels), 4):
+        if src_pixels[i] < 0.999:
+            has_useful_alpha = True
+            break
 
-    root.location = (-center.x, -center.y, -center.z)
-    root.scale = (scale, scale, scale)
-    bpy.context.view_layer.update()
-    return root
+    clean_pixels = [0.0] * len(src_pixels)
+    removed_background_pixels = 0
+
+    for i in range(0, len(src_pixels), 4):
+        r = src_pixels[i + 0]
+        g = src_pixels[i + 1]
+        b = src_pixels[i + 2]
+        a = src_pixels[i + 3]
+
+        if has_useful_alpha:
+            alpha = a
+        else:
+            brightness = (r + g + b) / 3.0
+            near_white = min(r, g, b) > 0.94 and brightness > 0.96
+            alpha = 0.0 if near_white else 1.0
+            if near_white:
+                removed_background_pixels += 1
+
+        if alpha <= 0.001:
+            clean_pixels[i + 0] = 0.0
+            clean_pixels[i + 1] = 0.0
+            clean_pixels[i + 2] = 0.0
+            clean_pixels[i + 3] = 0.0
+        else:
+            clean_pixels[i + 0] = r
+            clean_pixels[i + 1] = g
+            clean_pixels[i + 2] = b
+            clean_pixels[i + 3] = alpha
+
+    out_img = bpy.data.images.new(
+        name="HunyuanProjectedTexture",
+        width=width,
+        height=height,
+        alpha=True,
+    )
+    out_img.alpha_mode = "STRAIGHT"
+    out_img.colorspace_settings.name = "sRGB"
+    out_img.pixels[:] = clean_pixels
+    out_img.filepath_raw = str(source_path.parent / "__temp_clean_projection_texture.png")
+    out_img.file_format = "PNG"
+    out_img.save()
+
+    return {
+        "image": out_img,
+        "width": width,
+        "height": height,
+        "has_useful_alpha": has_useful_alpha,
+        "removed_background_pixels": removed_background_pixels,
+    }
 
 
-def ensure_uvs(mesh_object: bpy.types.Object) -> str:
-    if mesh_object.data.uv_layers and len(mesh_object.data.uv_layers) > 0:
-        return "existing"
+def create_planar_uvs(mesh_objects, bounds_info, uv_name="ProjectedUV"):
+    u_axis = bounds_info["u_axis"]
+    v_axis = bounds_info["v_axis"]
+    mins = bounds_info["mins"]
+    maxs = bounds_info["maxs"]
 
-    bpy.ops.object.select_all(action="DESELECT")
-    mesh_object.select_set(True)
-    bpy.context.view_layer.objects.active = mesh_object
-    bpy.ops.object.mode_set(mode="EDIT")
-    bpy.ops.mesh.select_all(action="SELECT")
-    bpy.ops.uv.smart_project(angle_limit=66.0, island_margin=0.03)
-    bpy.ops.object.mode_set(mode="OBJECT")
-    return "smart_project"
+    u_min = mins[u_axis]
+    u_max = maxs[u_axis]
+    v_min = mins[v_axis]
+    v_max = maxs[v_axis]
+
+    u_size = max(u_max - u_min, 1e-6)
+    v_size = max(v_max - v_min, 1e-6)
+
+    for obj in mesh_objects:
+        mesh = obj.data
+        uv_layer = mesh.uv_layers.get(uv_name)
+        if uv_layer is None:
+            uv_layer = mesh.uv_layers.new(name=uv_name)
+        mesh.uv_layers.active = uv_layer
+
+        for poly in mesh.polygons:
+            for loop_index in poly.loop_indices:
+                vertex_index = mesh.loops[loop_index].vertex_index
+                co = obj.matrix_world @ mesh.vertices[vertex_index].co
+                u = (co[u_axis] - u_min) / u_size
+                v = (co[v_axis] - v_min) / v_size
+                uv_layer.data[loop_index].uv = (u, v)
+
+    return uv_name
 
 
-def create_bake_material(mesh_object: bpy.types.Object, source_image: Path, baked_image: bpy.types.Image) -> bpy.types.Material:
-    material = bpy.data.materials.new(name="SourceTextureBakeMaterial")
+def build_material(texture_image, uv_name):
+    material = bpy.data.materials.new(name="ProjectedTextureMaterial")
     material.use_nodes = True
+    material.blend_method = "OPAQUE"
+    if hasattr(material, "shadow_method"):
+        material.shadow_method = "OPAQUE"
+
     nodes = material.node_tree.nodes
     links = material.node_tree.links
+    nodes.clear()
 
-    for node in list(nodes):
-        nodes.remove(node)
+    out = nodes.new(type="ShaderNodeOutputMaterial")
+    out.location = (700, 0)
 
-    output = nodes.new(type="ShaderNodeOutputMaterial")
-    output.location = (520, 0)
-    emission = nodes.new(type="ShaderNodeEmission")
-    emission.location = (260, 0)
-    texture = nodes.new(type="ShaderNodeTexImage")
-    texture.location = (0, 0)
-    texture.image = bpy.data.images.load(str(source_image))
+    bsdf = nodes.new(type="ShaderNodeBsdfPrincipled")
+    bsdf.location = (420, 0)
+    bsdf.inputs["Metallic"].default_value = 0.10
+    bsdf.inputs["Roughness"].default_value = 0.60
 
-    bake_node = nodes.new(type="ShaderNodeTexImage")
-    bake_node.location = (0, -250)
-    bake_node.image = baked_image
-    bake_node.select = True
-    nodes.active = bake_node
+    tex = nodes.new(type="ShaderNodeTexImage")
+    tex.location = (-420, 40)
+    tex.image = texture_image
+    tex.interpolation = "Linear"
 
-    links.new(texture.outputs["Color"], emission.inputs["Color"])
-    links.new(emission.outputs["Emission"], output.inputs["Surface"])
-    material.blend_method = "OPAQUE"
+    uv = nodes.new(type="ShaderNodeUVMap")
+    uv.location = (-650, 40)
+    uv.uv_map = uv_name
 
-    mesh_object.data.materials.clear()
-    mesh_object.data.materials.append(material)
+    mix = nodes.new(type="ShaderNodeMixRGB")
+    mix.location = (120, 80)
+    mix.blend_type = "MIX"
+    mix.inputs["Color1"].default_value = (0.07, 0.07, 0.08, 1.0)  # dark fallback, not white
+
+    links.new(uv.outputs["UV"], tex.inputs["Vector"])
+    links.new(tex.outputs["Alpha"], mix.inputs["Fac"])
+    links.new(tex.outputs["Color"], mix.inputs["Color2"])
+    links.new(mix.outputs["Color"], bsdf.inputs["Base Color"])
+    links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+
     return material
 
 
-def create_export_material(mesh_object: bpy.types.Object, texture_path: Path) -> bpy.types.Material:
-    material = bpy.data.materials.new(name="SourceTextureMaterial")
-    material.use_nodes = True
-    nodes = material.node_tree.nodes
-    links = material.node_tree.links
-
-    for node in list(nodes):
-        nodes.remove(node)
-
-    output = nodes.new(type="ShaderNodeOutputMaterial")
-    output.location = (520, 0)
-    principled = nodes.new(type="ShaderNodeBsdfPrincipled")
-    principled.location = (260, 0)
-    texture = nodes.new(type="ShaderNodeTexImage")
-    texture.location = (0, 0)
-    texture.image = bpy.data.images.load(str(texture_path))
-
-    links.new(texture.outputs["Color"], principled.inputs["Base Color"])
-    links.new(principled.outputs["BSDF"], output.inputs["Surface"])
-    material.blend_method = "OPAQUE"
-
-    mesh_object.data.materials.clear()
-    mesh_object.data.materials.append(material)
-    return material
+def assign_material(mesh_objects, material):
+    for obj in mesh_objects:
+        mesh = obj.data
+        mesh.materials.clear()
+        mesh.materials.append(material)
 
 
-def set_render_settings() -> None:
-    scene = bpy.context.scene
-    scene.render.engine = "CYCLES"
-    scene.cycles.samples = 1
-    scene.render.resolution_x = 1024
-    scene.render.resolution_y = 1024
+def save_output_texture(clean_image, output_texture: Path):
+    output_texture.parent.mkdir(parents=True, exist_ok=True)
+    clean_image.filepath_raw = str(output_texture)
+    clean_image.file_format = "PNG"
+    clean_image.save()
 
 
-def bake_texture(mesh_object: bpy.types.Object, baked_image: bpy.types.Image, bake_resolution: int) -> bool:
-    bpy.ops.object.select_all(action="DESELECT")
-    mesh_object.select_set(True)
-    bpy.context.view_layer.objects.active = mesh_object
-    bpy.context.scene.render.engine = "CYCLES"
-    bpy.context.scene.cycles.samples = 1
-    bpy.context.scene.cycles.preview_samples = 1
-    baked_image.scale(bake_resolution, bake_resolution)
-
-    try:
-        bpy.ops.object.bake(type="EMIT", margin=8)
-        return True
-    except Exception:
-        return False
-
-
-def export_glb(output_glb: Path) -> None:
+def export_glb(output_glb: Path):
     output_glb.parent.mkdir(parents=True, exist_ok=True)
-    bpy.ops.export_scene.gltf(filepath=str(output_glb), export_format="GLB")
+    bpy.ops.export_scene.gltf(
+        filepath=str(output_glb),
+        export_format="GLB",
+        use_selection=False,
+        export_apply=True,
+        export_texcoords=True,
+        export_normals=True,
+        export_tangents=False,
+        export_materials="EXPORT",
+        export_image_format="AUTO",
+    )
 
 
-def write_report(report_path: Path, report: dict) -> None:
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+def write_report(output_report: Path, report_data: dict):
+    output_report.parent.mkdir(parents=True, exist_ok=True)
+    output_report.write_text(json.dumps(report_data, indent=2), encoding="utf-8")
 
 
-def main() -> None:
+def main():
     args = parse_args()
-    mesh_path = path_or_fail(args.mesh, "Mesh")
-    source_image_path = path_or_fail(args.source_image, "Source image")
+
+    mesh_path = Path(args.mesh).resolve()
+    source_image_path = Path(args.source_image).resolve()
     output_glb = Path(args.output_glb).resolve()
     output_texture = Path(args.output_texture).resolve()
     output_report = Path(args.output_report).resolve()
 
     clear_scene()
 
-    imported_objects = import_model(mesh_path)
-    mesh_object = join_meshes(imported_objects)
-    root = center_and_normalize([mesh_object])
-    uv_mode = ensure_uvs(mesh_object)
-    set_render_settings()
+    mesh_objects = import_mesh(mesh_path)
+    apply_object_transforms(mesh_objects)
+    bounds_info = compute_world_bounds(mesh_objects)
 
-    baked_image = bpy.data.images.new("HunyuanBakedTexture", width=max(1, int(args.bake_resolution)), height=max(1, int(args.bake_resolution)))
-    baked_image.file_format = "PNG"
-    create_bake_material(mesh_object, source_image_path, baked_image)
+    cleaned = clean_source_image(source_image_path)
+    uv_name = create_planar_uvs(mesh_objects, bounds_info, uv_name="ProjectedUV")
+    material = build_material(cleaned["image"], uv_name)
+    assign_material(mesh_objects, material)
 
-    baked = bake_texture(mesh_object, baked_image, max(1, int(args.bake_resolution)))
-    if baked:
-        baked_image.filepath_raw = str(output_texture)
-        baked_image.file_format = "PNG"
-        baked_image.save()
-    else:
-        shutil.copyfile(source_image_path, output_texture)
-
-    create_export_material(mesh_object, output_texture)
-
+    save_output_texture(cleaned["image"], output_texture)
     export_glb(output_glb)
 
+    axis_names = ["X", "Y", "Z"]
     report = {
-        "meshPath": str(mesh_path),
+        "mesh": str(mesh_path),
         "sourceImage": str(source_image_path),
         "outputGlb": str(output_glb),
         "outputTexture": str(output_texture),
-        "projectionMode": args.projection_mode,
-        "uvMode": uv_mode,
-        "baked": baked,
-        "meshObjectCount": len(imported_objects),
-        "activeRoot": root.name
+        "projectionModeRequested": args.projection_mode,
+        "projectionModeEffective": "planar_bbox_projection",
+        "uvMap": uv_name,
+        "uAxis": axis_names[bounds_info["u_axis"]],
+        "vAxis": axis_names[bounds_info["v_axis"]],
+        "depthAxis": axis_names[bounds_info["depth_axis"]],
+        "extents": {
+            axis_names[i]: bounds_info["extents"][i] for i in range(3)
+        },
+        "sourceHadUsefulAlpha": cleaned["has_useful_alpha"],
+        "removedBackgroundPixels": cleaned["removed_background_pixels"],
+        "fallbackBaseColor": [0.07, 0.07, 0.08],
     }
     write_report(output_report, report)
+
     print(f"Textured GLB written: {output_glb}")
+    print(f"Baked texture written: {output_texture}")
+    print(f"Report written: {output_report}")
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as exc:  # noqa: BLE001
-        print(f"Texture projection failed: {exc}", file=sys.stderr)
-        raise
+    main()

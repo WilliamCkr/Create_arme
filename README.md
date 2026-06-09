@@ -50,7 +50,7 @@ The project now supports two explicit 3D generation modes:
 4. export a textured intermediate GLB
 5. continue with the existing multi-angle render, atlas, and manifest pipeline
 
-When a local Hunyuan runner is not yet connected, the pipeline uses a clean Blender placeholder mesh so the rest of the workflow can still be tested end to end.
+When `hunyuan.meshProvider` is set to `placeholder`, the pipeline still falls back to the Blender proxy mesh for quick smoke tests. When `meshProvider` is `external`, the launcher must be present and the pipeline fails clearly if it is missing.
 
 ## Quick Start
 
@@ -122,18 +122,31 @@ The experimental Hunyuan branch uses dedicated Blender scripts:
 - `blender/generate_hunyuan_proxy_mesh.py`
 - `blender/project_texture_to_mesh.py`
 
-The mesh runner can be connected later through the dedicated CLI/config fields:
+The mesh runner is connected through the dedicated CLI/config fields:
 
 - `hunyuan.meshProvider = "external"`
 - `hunyuan.runnerCommand`
 - `hunyuan.runnerArgs`
+- `hunyuan.outputMesh`
 
-If no external runner is available, the placeholder mesh keeps the pipeline usable.
+The launcher entrypoint is:
+
+- `tools/hunyuan3d/launch-hunyuan3d.mjs`
+
+The actual mesh generation runs in:
+
+- `tools/hunyuan3d/hunyuan_mesh_runner.py`
 
 Run the experimental flow with:
 
 ```bash
 npm run hunyuan:pipeline
+```
+
+Run the runner by itself with:
+
+```bash
+npm run hunyuan:runner -- --source-image input/cursed_sword_source.png --output-mesh output/hunyuan_cursed_sword/mesh.glb --output-dir output/hunyuan_cursed_sword --weapon-id cursed_sword --project-root .
 ```
 
 ## Expected Outputs
@@ -155,6 +168,8 @@ The Hunyuan experimental stage writes its intermediate files to:
 - `output/hunyuan_cursed_sword/textured.glb`
 - `output/hunyuan_cursed_sword/baked-texture.png`
 - `output/hunyuan_cursed_sword/hunyuan-pipeline-report.json`
+
+The launcher expects the Python environment to live at `tools/hunyuan3d-env/` or to be pointed to by `HUNYUAN3D_PYTHON`.
 
 ## Future Roadmap
 

@@ -1,0 +1,24 @@
+{
+  "mesh": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\mesh.glb",
+  "sourceImage": "C:\\Users\\william\\Desktop\\Creation arme\\input\\cursed_sword_source_cropped.png",
+  "outputGlb": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\textured.glb",
+  "outputTexture": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\baked-texture.png",
+  "projectionModeRequested": "smart_uv",
+  "projectionModeEffective": "planar_bbox_projection",
+  "uvMap": "ProjectedUV",
+  "uAxis": "X",
+  "vAxis": "Z",
+  "depthAxis": "Y",
+  "extents": {
+    "X": 0.6784088611602783,
+    "Y": 0.21255915611982346,
+    "Z": 1.9934878945350647
+  },
+  "sourceHadUsefulAlpha": false,
+  "removedBackgroundPixels": 413760,
+  "fallbackBaseColor": [
+    0.07,
+    0.07,
+    0.08
+  ]
+}

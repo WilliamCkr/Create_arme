@@ -10,6 +10,7 @@ import {
   resolveHunyuanBakedTexturePath,
   resolveHunyuanMeshPath,
   resolveHunyuanOutputDir,
+  resolveHunyuanOutputMeshPath,
   resolveHunyuanReportPath,
   resolveHunyuanTexturedGlbPath,
   runHunyuanMeshBlenderTexturePipeline
@@ -45,9 +46,10 @@ const defaultUiConfig = {
   },
   hunyuan: {
     meshProvider: "placeholder",
-    runnerCommand: "",
-    runnerArgs: [],
+    runnerCommand: "node",
+    runnerArgs: ["tools/hunyuan3d/launch-hunyuan3d.mjs", "--model-id", "tencent/Hunyuan3D-2"],
     outputDir: "output/hunyuan_cursed_sword",
+    outputMesh: "output/hunyuan_cursed_sword/mesh.glb",
     textureBakeResolution: 2048,
     projectionMode: "smart_uv"
   },
@@ -66,7 +68,8 @@ const state = {
   activeJob: null,
   lastJobStatus: {},
   lastExport: null,
-  validationState: "unchecked"
+  validationState: "unchecked",
+  lastHunyuan: null
 };
 
 function isWithinRoot(rootPath, targetPath) {
@@ -147,7 +150,18 @@ function toNumber(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function toNonEmptyString(value, fallback) {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function toStringArrayOrFallback(value, fallback) {
+  const filtered = Array.isArray(value) ? value.filter((entry) => typeof entry === "string" && entry.trim()) : [];
+  return filtered.length > 0 ? filtered : fallback;
+}
+
 function normalizeUiConfig(raw) {
+  const hunyuanOutputDir = raw?.hunyuan?.outputDir ?? defaultUiConfig.hunyuan.outputDir;
+  const hunyuanOutputMesh = raw?.hunyuan?.outputMesh ?? path.join(hunyuanOutputDir, "mesh.glb");
   const merged = {
     ...raw,
     sf3d: {
@@ -163,11 +177,12 @@ function normalizeUiConfig(raw) {
       ...defaultUiConfig.hunyuan,
       ...((raw?.hunyuan) ?? {}),
       meshProvider: raw?.hunyuan?.meshProvider === "external" ? "external" : "placeholder",
-      runnerCommand: raw?.hunyuan?.runnerCommand ?? defaultUiConfig.hunyuan.runnerCommand,
-      runnerArgs: Array.isArray(raw?.hunyuan?.runnerArgs) ? raw.hunyuan.runnerArgs.filter((value) => typeof value === "string") : defaultUiConfig.hunyuan.runnerArgs,
-      outputDir: raw?.hunyuan?.outputDir ?? defaultUiConfig.hunyuan.outputDir,
+      runnerCommand: toNonEmptyString(raw?.hunyuan?.runnerCommand, defaultUiConfig.hunyuan.runnerCommand),
+      runnerArgs: toStringArrayOrFallback(raw?.hunyuan?.runnerArgs, defaultUiConfig.hunyuan.runnerArgs),
+      outputDir: hunyuanOutputDir,
+      outputMesh: hunyuanOutputMesh,
       textureBakeResolution: toNumber(raw?.hunyuan?.textureBakeResolution, defaultUiConfig.hunyuan.textureBakeResolution),
-      projectionMode: raw?.hunyuan?.projectionMode ?? defaultUiConfig.hunyuan.projectionMode
+      projectionMode: toNonEmptyString(raw?.hunyuan?.projectionMode, defaultUiConfig.hunyuan.projectionMode)
     },
     renderMode: raw?.renderMode === "gameplay_2d" ? "gameplay_2d" : "turntable_3d",
     sf3dOutputDir: raw?.sf3dOutputDir ?? defaultUiConfig.sf3dOutputDir,
@@ -525,6 +540,7 @@ async function buildStatus() {
   const renderReportPath = path.join(outputPath, "render-report.json");
   const renderUiStatePath = renderUiStateRelPath(config.outputDir);
   const hunyuanOutputPath = resolveHunyuanOutputDir(config);
+  const hunyuanOutputMeshPath = resolveHunyuanOutputMeshPath(config);
   const hunyuanMeshPath = resolveHunyuanMeshPath(config);
   const hunyuanTexturedPath = resolveHunyuanTexturedGlbPath(config);
   const hunyuanBakeTexturePath = resolveHunyuanBakedTexturePath(config);
@@ -537,6 +553,7 @@ async function buildStatus() {
   const renderUiState = await readOptionalJson(renderUiStatePath);
   const sourceImageInfo = await readFileInfo(sourceImageRelPath);
   const inputModelInfo = await readFileInfo(inputModelRelPath);
+  const hunyuanOutputMeshInfo = await readFileInfo(path.relative(projectRoot, hunyuanOutputMeshPath));
   const hunyuanMeshInfo = await readFileInfo(path.relative(projectRoot, hunyuanMeshPath));
   const hunyuanTexturedInfo = await readFileInfo(path.relative(projectRoot, hunyuanTexturedPath));
   const hunyuanBakeTextureInfo = await readFileInfo(path.relative(projectRoot, hunyuanBakeTexturePath));
@@ -563,6 +580,8 @@ async function buildStatus() {
     && expectedExportFrames > 0
     && exportPackage.frameCount === expectedExportFrames
   );
+  const runnerConfigured = config.pipelineMode === "hunyuan_mesh_blender_texture" && Boolean(config.hunyuan?.runnerCommand?.trim());
+  const lastHunyuan = state.lastHunyuan ?? null;
 
   return {
     ok: true,
@@ -573,6 +592,7 @@ async function buildStatus() {
     files: {
       sourceImage: sourceImageInfo,
       inputModel: inputModelInfo,
+      hunyuanOutputMesh: hunyuanOutputMeshInfo,
       sf3dGlb: sf3dGlbInfo,
       hunyuanMesh: hunyuanMeshInfo,
       hunyuanTexturedModel: hunyuanTexturedInfo,
@@ -599,6 +619,7 @@ async function buildStatus() {
     paths: {
       sf3dGlb: sf3dGlbRelPath,
       hunyuanOutputDir: path.relative(projectRoot, hunyuanOutputPath),
+      hunyuanOutputMesh: path.relative(projectRoot, hunyuanOutputMeshPath),
       hunyuanMesh: path.relative(projectRoot, hunyuanMeshPath),
       hunyuanTexturedModel: path.relative(projectRoot, hunyuanTexturedPath),
       hunyuanBakeTexture: path.relative(projectRoot, hunyuanBakeTexturePath),
@@ -612,6 +633,7 @@ async function buildStatus() {
     lastRenderMode: renderUiState?.renderMode ?? null,
     lastRenderState: renderUiState ?? null,
     lastExportTimestamp: exportPackage.lastExportTimestamp ?? state.lastExport?.exportedAt ?? null,
+    lastHunyuan,
     counts: {
       expectedAngles: config.angles.length,
       existingFrames: frameCount,
@@ -625,6 +647,12 @@ async function buildStatus() {
       hunyuanMesh: {
         state: stageBadgeState(hunyuanMeshInfo.exists, "hunyuanMesh"),
         detail: hunyuanMeshInfo.exists ? "mesh.glb exists" : "mesh.glb missing"
+      },
+      hunyuanRunner: {
+        state: runnerConfigured ? "Ready" : "Missing",
+        detail: runnerConfigured
+          ? `runnerCommand=${config.hunyuan?.runnerCommand ?? "n/a"}`
+          : "runnerCommand missing"
       },
       textureBake: {
         state: stageBadgeState(hunyuanTexturedInfo.exists, "textureBake"),
@@ -678,10 +706,29 @@ async function buildStatus() {
           ? `${config.hunyuan.meshProvider === "external" ? "External Hunyuan runner" : "Placeholder mesh"} + Blender texture bake`
           : "SF3D full pipeline"
       },
+      hunyuan: {
+        state: config.pipelineMode === "hunyuan_mesh_blender_texture" ? "Enabled" : "Disabled",
+        detail: config.pipelineMode === "hunyuan_mesh_blender_texture"
+          ? `Provider: ${config.hunyuan.meshProvider}; runner: ${runnerConfigured ? "configured" : "missing"}`
+          : "Hunyuan pipeline not selected"
+      },
       manifest: {
         state: manifestBadgeState(manifestValidation, manifestInfo.exists),
         detail: manifestValidation
       }
+    },
+    hunyuan: {
+      pipelineMode: config.pipelineMode,
+      meshProvider: config.hunyuan?.meshProvider ?? "placeholder",
+      runnerConfigured,
+      runnerCommand: config.hunyuan?.runnerCommand ?? "",
+      runnerArgs: Array.isArray(config.hunyuan?.runnerArgs) ? config.hunyuan.runnerArgs : [],
+      outputDir: path.relative(projectRoot, hunyuanOutputPath),
+      outputMesh: path.relative(projectRoot, hunyuanOutputMeshPath),
+      texturedGlb: path.relative(projectRoot, hunyuanTexturedPath),
+      bakedTexture: path.relative(projectRoot, hunyuanBakeTexturePath),
+      report: path.relative(projectRoot, hunyuanReportPath),
+      lastRun: lastHunyuan
     },
     recentLogs
   };
@@ -1179,6 +1226,12 @@ async function handleApi(req, res, url) {
         config,
         emitLog
       });
+      state.lastHunyuan = {
+        status: "done",
+        message: "Hunyuan mesh and texture bake completed.",
+        generatedAt: new Date().toISOString(),
+        ...result
+      };
       endJob("hunyuanMesh", "done");
       endJob("textureBake", "done");
       const status = await buildStatus();
@@ -1187,8 +1240,16 @@ async function handleApi(req, res, url) {
     } catch (error) {
       endJob("hunyuanMesh", "failed");
       endJob("textureBake", "failed");
-      emitLog("error", "hunyuan", error instanceof Error ? error.message : String(error));
-      sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+      const message = error instanceof Error ? error.message : String(error);
+      state.lastHunyuan = {
+        status: "failed",
+        message,
+        generatedAt: new Date().toISOString()
+      };
+      const status = await buildStatus();
+      emitStatus(status);
+      emitLog("error", "hunyuan", message);
+      sendJson(res, 500, { ok: false, error: message, status });
     } finally {
       state.busy = false;
     }

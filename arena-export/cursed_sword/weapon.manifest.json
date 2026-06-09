@@ -1,0 +1,79 @@
+{
+  "id": "cursed_sword",
+  "name": "Cursed Sword",
+  "kind": "weapon",
+  "weaponType": "two_handed_sword",
+  "angleProfile": "weapon_12_full_rotation",
+  "atlas": "atlas.png",
+  "frameSize": {
+    "width": 512,
+    "height": 512
+  },
+  "pivot": {
+    "x": 256,
+    "y": 256,
+    "mode": "center"
+  },
+  "angleFrames": [
+    {
+      "angle": 0,
+      "frame": 0,
+      "src": "frames/angle_000.png"
+    },
+    {
+      "angle": 30,
+      "frame": 1,
+      "src": "frames/angle_030.png"
+    },
+    {
+      "angle": 60,
+      "frame": 2,
+      "src": "frames/angle_060.png"
+    },
+    {
+      "angle": 90,
+      "frame": 3,
+      "src": "frames/angle_090.png"
+    },
+    {
+      "angle": 120,
+      "frame": 4,
+      "src": "frames/angle_120.png"
+    },
+    {
+      "angle": 150,
+      "frame": 5,
+      "src": "frames/angle_150.png"
+    },
+    {
+      "angle": 180,
+      "frame": 6,
+      "src": "frames/angle_180.png"
+    },
+    {
+      "angle": 210,
+      "frame": 7,
+      "src": "frames/angle_210.png"
+    },
+    {
+      "angle": 240,
+      "frame": 8,
+      "src": "frames/angle_240.png"
+    },
+    {
+      "angle": 270,
+      "frame": 9,
+      "src": "frames/angle_270.png"
+    },
+    {
+      "angle": 300,
+      "frame": 10,
+      "src": "frames/angle_300.png"
+    },
+    {
+      "angle": 330,
+      "frame": 11,
+      "src": "frames/angle_330.png"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "weaponId": "cursed_sword",
+  "sourceImage": "C:\\Users\\william\\Desktop\\Creation arme\\input\\cursed_sword_source.png",
+  "outputMesh": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\mesh.glb",
+  "outputDir": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword",
+  "modelPath": "tencent/Hunyuan3D-2mini",
+  "subfolder": "hunyuan3d-dit-v2-mini-turbo",
+  "device": "cuda",
+  "numSteps": 30,
+  "guidanceScale": 5.5,
+  "status": "ok",
+  "outputMeshSizeBytes": 2680752
+}

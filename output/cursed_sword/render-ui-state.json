@@ -1,0 +1,32 @@
+{
+  "renderMode": "turntable_3d",
+  "angles": [
+    0,
+    30,
+    60,
+    90,
+    120,
+    150,
+    180,
+    210,
+    240,
+    270,
+    300,
+    330
+  ],
+  "frameSize": {
+    "width": 512,
+    "height": 512
+  },
+  "orthographicScale": 3,
+  "materialOverride": {
+    "enabled": true,
+    "metallic": 0.15,
+    "roughness": 0.82,
+    "specular": 0.25,
+    "clearcoat": 0
+  },
+  "lightingStrength": 0.8,
+  "timestamp": "2026-06-09T23:31:09.306Z",
+  "inputModel": "input/cursed_sword.glb"
+}

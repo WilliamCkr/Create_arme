@@ -7,14 +7,38 @@
   "sourceTexture": "input/cursed_sword_source.png",
   "outputDir": "output/cursed_sword",
   "pipelineMode": "sf3d_full",
-  "angles": [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330],
-  "frameSize": { "width": 512, "height": 512 },
-  "atlas": { "columns": 4, "rows": 3 },
+  "angles": [
+    0,
+    30,
+    60,
+    90,
+    120,
+    150,
+    180,
+    210,
+    240,
+    270,
+    300,
+    330
+  ],
+  "frameSize": {
+    "width": 512,
+    "height": 512
+  },
+  "atlas": {
+    "columns": 4,
+    "rows": 3
+  },
   "hunyuan": {
-    "meshProvider": "placeholder",
-    "runnerCommand": "",
-    "runnerArgs": [],
+    "meshProvider": "external",
+    "runnerCommand": "node",
+    "runnerArgs": [
+      "tools/hunyuan3d/launch-hunyuan3d.mjs",
+      "--model-id",
+      "tencent/Hunyuan3D-2mini"
+    ],
     "outputDir": "output/hunyuan_cursed_sword",
+    "outputMesh": "output/hunyuan_cursed_sword/mesh.glb",
     "textureBakeResolution": 2048,
     "projectionMode": "smart_uv"
   },

@@ -1,0 +1,21 @@
+{
+  "id": "cursed_sword",
+  "inputModel": "C:\\Users\\william\\Desktop\\Creation arme\\input\\cursed_sword.glb",
+  "renderMode": "turntable_3d",
+  "generatedFrames": [
+    "C:\\Users\\william\\Desktop\\Creation arme\\output\\cursed_sword\\frames\\angle_000.png",
+    "C:\\Users\\william\\Desktop\\Creation arme\\output\\cursed_sword\\frames\\angle_030.png",
+    "C:\\Users\\william\\Desktop\\Creation arme\\output\\cursed_sword\\frames\\angle_060.png",
+    "C:\\Users\\william\\Desktop\\Creation arme\\output\\cursed_sword\\frames\\angle_090.png",
+    "C:\\Users\\william\\Desktop\\Creation arme\\output\\cursed_sword\\frames\\angle_120.png",
+    "C:\\Users\\william\\Desktop\\Creation arme\\output\\cursed_sword\\frames\\angle_150.png",
+    "C:\\Users\\william\\Desktop\\Creation arme\\output\\cursed_sword\\frames\\angle_180.png",
+    "C:\\Users\\william\\Desktop\\Creation arme\\output\\cursed_sword\\frames\\angle_210.png",
+    "C:\\Users\\william\\Desktop\\Creation arme\\output\\cursed_sword\\frames\\angle_240.png",
+    "C:\\Users\\william\\Desktop\\Creation arme\\output\\cursed_sword\\frames\\angle_270.png",
+    "C:\\Users\\william\\Desktop\\Creation arme\\output\\cursed_sword\\frames\\angle_300.png",
+    "C:\\Users\\william\\Desktop\\Creation arme\\output\\cursed_sword\\frames\\angle_330.png"
+  ],
+  "warnings": [],
+  "blenderVersion": "4.5.1 LTS"
+}

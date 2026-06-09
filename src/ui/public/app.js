@@ -322,6 +322,7 @@ function updateDraftFromStepInputs() {
         runnerCommand: el.advancedBody.querySelector("#hunyuanRunnerCommandInput")?.value ?? draft.hunyuan?.runnerCommand ?? "",
         runnerArgs: parseList(el.advancedBody.querySelector("#hunyuanRunnerArgsInput")?.value ?? (draft.hunyuan?.runnerArgs ?? []).join("\n")),
         outputDir: el.advancedBody.querySelector("#hunyuanOutputDirInput")?.value ?? draft.hunyuan?.outputDir ?? "output/hunyuan_cursed_sword",
+        outputMesh: el.advancedBody.querySelector("#hunyuanOutputMeshInput")?.value ?? draft.hunyuan?.outputMesh ?? "output/hunyuan_cursed_sword/mesh.glb",
         textureBakeResolution: Number(el.advancedBody.querySelector("#hunyuanTextureBakeResolutionInput")?.value ?? draft.hunyuan?.textureBakeResolution ?? 2048),
         projectionMode: el.advancedBody.querySelector("#hunyuanProjectionModeInput")?.value ?? draft.hunyuan?.projectionMode ?? "smart_uv"
       };
@@ -457,6 +458,7 @@ function renderPreview() {
   const pipelineMode = currentPipelineMode();
   const hunyuanTexture = files().hunyuanBakeTexture;
   const hunyuanTexturedModel = files().hunyuanTexturedModel;
+  const lastHunyuan = state.status?.lastHunyuan ?? null;
   let html = "";
   let caption = "";
 
@@ -495,6 +497,7 @@ function renderPreview() {
             <p>${escapeHtml(formatBytes(model.size))}</p>
             <p><strong>Textured GLB</strong></p>
             <p>${escapeHtml(hunyuanTexturedModel?.path ?? "output/hunyuan_cursed_sword/textured.glb")}</p>
+            <p><strong>Last run</strong>: ${escapeHtml(lastHunyuan?.status ?? "n/a")}</p>
             <p>The mesh comes from Hunyuan3D and the visible texture is projected from the source image in Blender.</p>
           </div>
         </div>
@@ -584,6 +587,8 @@ function renderStepOptions() {
   const pipelineMeta = pipelineModeMeta(pipelineMode);
   const hunyuanMeshStage = state.status?.stages?.hunyuanMesh ?? {};
   const hunyuanBakeStage = state.status?.stages?.textureBake ?? {};
+  const hunyuanStatus = state.status?.hunyuan ?? {};
+  const lastHunyuan = state.status?.lastHunyuan ?? null;
 
   if (state.currentStepIndex === 0) {
     el.stepOptions.innerHTML = `
@@ -601,10 +606,14 @@ function renderStepOptions() {
     el.stepOptions.innerHTML = `
       <div class="status-grid">
         <div>Pipeline</div><div>${escapeHtml(pipelineMeta.label)}</div>
+        <div>Mesh provider</div><div>${escapeHtml(hunyuanStatus.meshProvider ?? "placeholder")}</div>
+        <div>Runner configured</div><div>${escapeHtml(hunyuanStatus.runnerConfigured ? "Yes" : "No")}</div>
+        <div>Output mesh</div><div>${escapeHtml(displayPath(hunyuanStatus.outputMesh ?? "output/hunyuan_cursed_sword/mesh.glb"))}</div>
         <div>Active model</div><div>${escapeHtml(activeModel?.path ?? "n/a")}</div>
         <div>Size</div><div>${escapeHtml(activeModel ? formatBytes(activeModel.size) : "n/a")}</div>
         <div>Mesh stage</div><div>${escapeHtml(isHunyuanPipeline() ? (hunyuanMeshStage.state ?? "Not checked") : (state.status?.tools?.sf3d?.exists ? "Ready" : "Missing"))}</div>
         <div>Texture bake</div><div>${escapeHtml(isHunyuanPipeline() ? (hunyuanBakeStage.state ?? "Not checked") : "SF3D texture generation")}</div>
+        <div>Last run</div><div>${escapeHtml(lastHunyuan?.status ?? "n/a")}</div>
       </div>
       <label>
         Pipeline
@@ -736,10 +745,13 @@ function renderAdvancedPanels() {
         <h3>Hunyuan Settings</h3>
       </div>
       <div class="status-grid compact-grid">
-        <div>Mesh provider</div><div>${escapeHtml(hunyuan.meshProvider === "external" ? "External runner" : "Placeholder mesh")}</div>
+        <div>Mesh provider</div><div>${escapeHtml(hunyuan.meshProvider === "external" ? "external" : "placeholder")}</div>
+        <div>Runner configured</div><div>${escapeHtml(state.status?.hunyuan?.runnerConfigured ? "yes" : "no")}</div>
+        <div>Last run</div><div>${escapeHtml(state.status?.lastHunyuan?.status ?? "n/a")}</div>
         <div>Mesh stage</div><div>${escapeHtml(state.status?.stages?.hunyuanMesh?.state ?? "Not checked")}</div>
         <div>Texture bake</div><div>${escapeHtml(state.status?.stages?.textureBake?.state ?? "Not checked")}</div>
         <div>Active model</div><div>${escapeHtml(displayPath(model?.path ?? "input/cursed_sword.glb"))}</div>
+        <div>Output mesh</div><div>${escapeHtml(displayPath(state.status?.paths?.hunyuanOutputMesh ?? "output/hunyuan_cursed_sword/mesh.glb"))}</div>
         <div>Textured GLB</div><div>${escapeHtml(displayPath(state.status?.files?.hunyuanTexturedModel?.path ?? "output/hunyuan_cursed_sword/textured.glb"))}</div>
         <div>Output dir</div><div>${escapeHtml(displayPath(hunyuan.outputDir ?? "output/hunyuan_cursed_sword"))}</div>
       </div>
@@ -754,6 +766,10 @@ function renderAdvancedPanels() {
         <label>
           outputDir
           <input id="hunyuanOutputDirInput" type="text" value="${escapeHtml(hunyuan.outputDir ?? "output/hunyuan_cursed_sword")}" />
+        </label>
+        <label>
+          outputMesh
+          <input id="hunyuanOutputMeshInput" type="text" value="${escapeHtml(hunyuan.outputMesh ?? "output/hunyuan_cursed_sword/mesh.glb")}" />
         </label>
         <label>
           textureBakeResolution

@@ -48,3 +48,7 @@ Thumbs.db
 # temporary patch files
 *_backup*
 *.bak
+
+# Hunyuan3D local install / heavy models
+tools/Hunyuan3D-2/
+tools/hunyuan3d-env/

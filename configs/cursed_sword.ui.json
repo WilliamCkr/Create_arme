@@ -3,16 +3,17 @@
   "name": "Cursed Sword",
   "kind": "weapon",
   "weaponType": "two_handed_sword",
-  "sourceImage": "input/cursed_sword_source.png",
   "inputModel": "input/cursed_sword.glb",
-  "sf3dOutputModel": "output/sf3d_cursed_sword/0/mesh.glb",
+  "sourceTexture": "input/cursed_sword_source.png",
   "outputDir": "output/cursed_sword",
-  "pipelineMode": "hunyuan_mesh_blender_texture",
-  "foregroundRatio": 0.85,
-  "textureResolution": 4096,
-  "remeshOption": "none",
-  "targetVertexCount": -1,
-  "renderMode": "gameplay_2d",
+  "sf3dOutputDir": "output/sf3d_cursed_sword",
+  "renderMode": "turntable_3d",
+  "sf3d": {
+    "foregroundRatio": 0.85,
+    "textureResolution": 2048,
+    "remeshOption": "none",
+    "targetVertexCount": -1
+  },
   "angles": [
     0,
     30,
@@ -27,36 +28,6 @@
     300,
     330
   ],
-  "frameWidth": 512,
-  "frameHeight": 512,
-  "orthographicScale": 3,
-  "lightingStrength": 0.8,
-  "materialOverrideEnabled": true,
-  "metallic": 0.15,
-  "roughness": 0.82,
-  "specular": 0.25,
-  "clearcoat": 0,
-  "alpha": 1,
-  "sf3d": {
-    "foregroundRatio": 0.81,
-    "textureResolution": 1024,
-    "remeshOption": "none",
-    "targetVertexCount": -1
-  },
-  "hunyuan": {
-    "meshProvider": "placeholder",
-    "runnerCommand": "",
-    "runnerArgs": [],
-    "outputDir": "output/hunyuan_cursed_sword",
-    "textureBakeResolution": 2048,
-    "projectionMode": "smart_uv"
-  },
-  "sf3dGeneration": {
-    "foregroundRatio": 0.85,
-    "textureResolution": 2048,
-    "remeshOption": "none",
-    "targetVertexCount": -1
-  },
   "frameSize": {
     "width": 512,
     "height": 512
@@ -91,10 +62,18 @@
     "y": 256,
     "mode": "center"
   },
-  "ui": {
-    "currentStep": 2,
-    "preset": "Sword Gameplay 2D",
-    "advancedToolsOpen": true
-  },
-  "sf3dOutputDir": "output/sf3d_cursed_sword"
+  "pipelineMode": "hunyuan_mesh_blender_texture",
+  "hunyuan": {
+    "meshProvider": "external",
+    "runnerCommand": "node",
+    "runnerArgs": [
+      "tools/hunyuan3d/launch-hunyuan3d.mjs",
+      "--model-id",
+      "tencent/Hunyuan3D-2mini"
+    ],
+    "outputDir": "output/hunyuan_cursed_sword",
+    "outputMesh": "output/hunyuan_cursed_sword/mesh.glb",
+    "textureBakeResolution": 2048,
+    "projectionMode": "smart_uv"
+  }
 }
