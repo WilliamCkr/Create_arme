@@ -1,5 +1,5 @@
 {
-  "renderMode": "gameplay_2d",
+  "renderMode": "turntable_3d",
   "angles": [
     0,
     30,
@@ -27,6 +27,6 @@
     "clearcoat": 0
   },
   "lightingStrength": 0.8,
-  "timestamp": "2026-06-09T21:47:07.823Z",
+  "timestamp": "2026-06-09T23:31:09.306Z",
   "inputModel": "input/cursed_sword.glb"
 }

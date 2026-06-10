@@ -1,38 +1,43 @@
 {
-  "mesh": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\mesh.glb",
-  "sourceImage": "C:\\Users\\william\\Desktop\\Creation arme\\input\\cursed_sword_source_cropped.png",
-  "outputGlb": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\textured.glb",
-  "outputTexture": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\baked-texture.png",
-  "cleanSource": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\clean-source-alpha.png",
-  "algorithmicBase": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\algorithmic-base.png",
-  "projectionMode": "algorithmic_base_then_source_overlay",
-  "uvName": "AOF_ProjectUV",
-  "bounds": {
-    "mins": [
-      -0.3417920470237732,
-      -0.1039755567908287,
-      -0.9995744824409485
-    ],
-    "maxs": [
-      0.3366168141365051,
-      0.10858359932899475,
-      0.9939134120941162
-    ],
-    "extents": [
-      0.6784088611602783,
-      0.21255915611982346,
-      1.9934878945350647
-    ],
-    "v_axis": 2,
-    "u_axis": 0,
-    "depth_axis": 1
-  },
+  "mesh": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\mesh.glb",
+  "sourceImage": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\input\\cursed_sword_source_cropped.png",
+  "outputGlb": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\textured.pixel-gradient-step2.glb",
+  "outputTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\baked-texture.pixel-gradient-step2.png",
+  "sideTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\layer1.pixel-gradient-step2.png",
+  "sourceLockTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\source-lock.png",
+  "uvName": "ProjectedUV",
   "sourceStats": {
     "width": 479,
     "height": 1448,
-    "removedWhitePixels": 412434,
-    "keptPixelsApprox": 278868
+    "removedWhitePixels": 412918,
+    "keptPixelsApprox": 280674
   },
-  "bakeResolution": 2048,
-  "important": "Algorithmic base is applied first. Clean source alpha is overlaid last using the same planar UV mapping."
+  "materialStats": {
+    "sourceFaces": 143872,
+    "sideFillFaces": 5012,
+    "threshold": 0.3,
+    "depthAxis": 1,
+    "useSourceBothFaces": true,
+    "sourceFaceSign": 1
+  },
+  "targetTextureSize": {
+    "width": 479,
+    "height": 1448
+  },
+  "pixelGradientSettings": {
+    "edgeBandPx": 16.0,
+    "sourceInsetPx": 6.0,
+    "gradientSpanPx": 8.0
+  },
+  "warpSettings": {
+    "warpUpscale": 1.0,
+    "warpStretchX": 1.0,
+    "warpStretchY": 1.0,
+    "warpContrast": 1.0,
+    "warpBrightness": 1.0,
+    "warpExpandPasses": 1,
+    "warpAlphaThreshold": 0.02,
+    "lockAlphaThreshold": 0.02
+  },
+  "important": "Layer 1 = fill / gradient. Final composite = source base + layer1 gradient above."
 }
