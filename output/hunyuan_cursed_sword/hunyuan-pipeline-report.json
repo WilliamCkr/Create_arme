@@ -3,22 +3,36 @@
   "sourceImage": "C:\\Users\\william\\Desktop\\Creation arme\\input\\cursed_sword_source_cropped.png",
   "outputGlb": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\textured.glb",
   "outputTexture": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\baked-texture.png",
-  "projectionModeRequested": "smart_uv",
-  "projectionModeEffective": "planar_bbox_projection",
-  "uvMap": "ProjectedUV",
-  "uAxis": "X",
-  "vAxis": "Z",
-  "depthAxis": "Y",
-  "extents": {
-    "X": 0.6784088611602783,
-    "Y": 0.21255915611982346,
-    "Z": 1.9934878945350647
+  "cleanSource": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\clean-source-alpha.png",
+  "algorithmicBase": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\algorithmic-base.png",
+  "projectionMode": "algorithmic_base_then_source_overlay",
+  "uvName": "AOF_ProjectUV",
+  "bounds": {
+    "mins": [
+      -0.3417920470237732,
+      -0.1039755567908287,
+      -0.9995744824409485
+    ],
+    "maxs": [
+      0.3366168141365051,
+      0.10858359932899475,
+      0.9939134120941162
+    ],
+    "extents": [
+      0.6784088611602783,
+      0.21255915611982346,
+      1.9934878945350647
+    ],
+    "v_axis": 2,
+    "u_axis": 0,
+    "depth_axis": 1
   },
-  "sourceHadUsefulAlpha": false,
-  "removedBackgroundPixels": 413760,
-  "fallbackBaseColor": [
-    0.07,
-    0.07,
-    0.08
-  ]
+  "sourceStats": {
+    "width": 479,
+    "height": 1448,
+    "removedWhitePixels": 412434,
+    "keptPixelsApprox": 278868
+  },
+  "bakeResolution": 2048,
+  "important": "Algorithmic base is applied first. Clean source alpha is overlaid last using the same planar UV mapping."
 }
