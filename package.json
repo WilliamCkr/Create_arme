@@ -16,7 +16,8 @@
     "ui": "node src/ui/server.mjs",
     "ui:server": "node src/ui/server.mjs",
     "ui:dev": "node --watch src/ui/server.mjs",
-    "hunyuan:bootstrap": "python tools/bootstrap-hunyuan3d-env.py"
+    "hunyuan:bootstrap": "python tools/bootstrap-hunyuan3d-env.py",
+    "sidefill:ui": "node tools/sidefill-debug-server.mjs"
   },
   "dependencies": {
     "sharp": "^0.34.3",

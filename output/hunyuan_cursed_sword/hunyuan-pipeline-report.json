@@ -1,24 +1,69 @@
 {
-  "mesh": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\mesh.glb",
-  "sourceImage": "C:\\Users\\william\\Desktop\\Creation arme\\input\\cursed_sword_source_cropped.png",
-  "outputGlb": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\textured.glb",
-  "outputTexture": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\baked-texture.png",
-  "projectionModeRequested": "smart_uv",
-  "projectionModeEffective": "planar_bbox_projection",
-  "uvMap": "ProjectedUV",
-  "uAxis": "X",
-  "vAxis": "Z",
-  "depthAxis": "Y",
-  "extents": {
-    "X": 0.6784088611602783,
-    "Y": 0.21255915611982346,
-    "Z": 1.9934878945350647
+  "mesh": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\mesh.glb",
+  "sourceImageArg": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\input\\cursed_sword_source_cropped.png",
+  "lockedSourceTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\source-lock.png",
+  "outputGlb": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\textured.sidefill.ui.test.glb",
+  "outputTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\baked-texture.sidefill.ui.test.png",
+  "sideTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\algorithmic-side-fill.ui.test.png",
+  "uvNameSource": "ProjectedUV",
+  "uvNameSide": "SideUV",
+  "bounds": {
+    "min": [
+      -0.3417920470237732,
+      -0.1039755567908287,
+      -0.9995744824409485
+    ],
+    "max": [
+      0.3366168141365051,
+      0.10858359932899475,
+      0.9939134120941162
+    ],
+    "size": [
+      0.6784088611602783,
+      0.21255915611982346,
+      1.9934878945350647
+    ],
+    "depthAxis": 1,
+    "uAxis": 0,
+    "vAxis": 2
   },
-  "sourceHadUsefulAlpha": false,
-  "removedBackgroundPixels": 413760,
-  "fallbackBaseColor": [
-    0.07,
-    0.07,
-    0.08
-  ]
+  "sourceStats": {
+    "sourceLocked": true,
+    "whiteControlsIgnored": true,
+    "alphaControlsIgnored": true,
+    "message": "The visible source texture is loaded from source-lock.png and copied exactly where alpha is opaque. Transparent zones are filled by algorithm before GLB export.",
+    "composite": {
+      "width": 479,
+      "height": 1448,
+      "sourceKeptPixels": 279832,
+      "algorithmOnlyPixels": 413760,
+      "mixedPixels": 0,
+      "sourceLocked": true,
+      "exportableComposite": true
+    }
+  },
+  "materialStats": {
+    "sourceFaces": 143872,
+    "sideFillFaces": 5012,
+    "threshold": 0.3,
+    "depthAxis": 1,
+    "useSourceBothFaces": true,
+    "sourceFaceSign": 1
+  },
+  "params": {
+    "sourceFaceThreshold": 0.3,
+    "sourceFaceSign": 1,
+    "useSourceBothFaces": true,
+    "sourceFlipU": false,
+    "sourceFlipV": false,
+    "sourceSwapUV": false,
+    "sideBase": 0.115,
+    "sideNoise": 0.115,
+    "sideHighlight": 0.12,
+    "sideCrack": 0.18,
+    "sidePurple": 0.22,
+    "sideEdgeDarkness": 0.2,
+    "sideWidth": 1024,
+    "sideHeight": 2048
+  }
 }
