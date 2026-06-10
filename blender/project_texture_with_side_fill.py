@@ -60,6 +60,7 @@ def parse_args():
     p.add_argument("--edge-band-px", type=float, default=18.0)
 
     p.add_argument("--source-inset-px", type=float, default=2.0)
+    p.add_argument("--source-edge-px", type=float, default=4.0)
 
     p.add_argument("--gradient-span-px", type=float, default=28.0)
 
@@ -774,150 +775,66 @@ def build_warp_fill_from_source(
     return np.clip(out, 0.0, 1.0).astype(np.float32).reshape(-1)
 
 
-def compose_lock_over_fill(fill_img, source_lock_img, lock_alpha_threshold=0.02):
+def compose_lock_over_fill(source_lock_pixels, layer1_pixels, lock_alpha_threshold=0.02):
     """
-    Final composite rule:
-    - inside source silhouette: keep source_lock
-    - outside source silhouette: use fill
+    Final Step 2 composite.
 
-    This prevents the fill from leaking as a violet band inside the sword.
+    Now that Layer 1 is post-processed to preserve the source inside the sword,
+    the final logic can be:
+
+        source base + corrected Layer 1 above
+
+    In practice, Layer 1 should already contain:
+    - exact source pixels inside the sword
+    - pixel-gradient fill outside
     """
 
-    def to_rgba_image(arr, name):
-        arr = np.asarray(arr)
+    source = np.asarray(source_lock_pixels, dtype=np.float32)
+    layer1 = np.asarray(layer1_pixels, dtype=np.float32)
 
-        if arr.ndim == 3:
-            out = arr.astype(np.float32)
-            if out.shape[2] == 3:
-                alpha = np.ones((out.shape[0], out.shape[1], 1), dtype=np.float32)
-                out = np.concatenate([out, alpha], axis=2)
-            elif out.shape[2] != 4:
-                raise ValueError(f"{name}: unsupported channel count {out.shape}")
-            if out.size and float(np.nanmax(out)) > 1.5:
-                out = out / 255.0
-            return np.clip(out, 0.0, 1.0)
+    if source.shape != layer1.shape:
+        raise ValueError(f"source/layer1 shape mismatch: source={source.shape}, layer1={layer1.shape}")
 
-        if arr.ndim == 1:
-            if arr.size % 4 != 0:
-                raise ValueError(f"{name}: flat array size is not divisible by 4: {arr.size}")
-            out = arr.astype(np.float32).reshape((-1, 4))
-            if out.size and float(np.nanmax(out)) > 1.5:
-                out = out / 255.0
-            return np.clip(out, 0.0, 1.0)
+    if source.size and float(np.nanmax(source)) > 1.5:
+        source = source / 255.0
+    if layer1.size and float(np.nanmax(layer1)) > 1.5:
+        layer1 = layer1 / 255.0
 
-        if arr.ndim == 2 and arr.shape[-1] == 4:
-            out = arr.astype(np.float32)
-            if out.size and float(np.nanmax(out)) > 1.5:
-                out = out / 255.0
-            return np.clip(out, 0.0, 1.0)
+    source = np.clip(source, 0.0, 1.0)
+    layer1 = np.clip(layer1, 0.0, 1.0)
 
-        raise ValueError(f"{name}: unsupported shape {arr.shape}")
+    # Since Layer 1 is now corrected after generation, it is the intended final overlay.
+    # Keep the naming explicit: final composite = corrected Layer 1 over source.
+    out = layer1.copy()
 
-    source_rgba = to_rgba_image(source_lock_img, "source_lock_img")
-    fill_rgba = to_rgba_image(fill_img, "fill_img")
+    # Quality guard: measure whether Layer 1 still preserves source pixels inside.
+    src_flat = source.reshape((-1, 4))
+    out_flat = out.reshape((-1, 4))
 
-    if source_rgba.shape != fill_rgba.shape:
-        raise ValueError(
-            f"compose_lock_over_fill shape mismatch: "
-            f"source={source_rgba.shape}, fill={fill_rgba.shape}"
-        )
+    rgb = src_flat[:, 0:3]
+    alpha = src_flat[:, 3]
 
-    out = fill_rgba.copy()
+    rgb_max = rgb.max(axis=1)
+    rgb_min = rgb.min(axis=1)
+    rgb_mean = rgb.mean(axis=1)
+    chroma = rgb_max - rgb_min
 
-    if source_rgba.ndim == 3:
-        source_mask = source_rgba[:, :, 3] > float(lock_alpha_threshold)
-        out[source_mask] = source_rgba[source_mask]
-        print(
-            f"Composite order: source inside / fill outside | "
-            f"shape={out.shape} protected_pixels={int(source_mask.sum())}"
-        )
-        return np.clip(out, 0.0, 1.0).astype(np.float32).reshape(-1)
+    non_black_source = rgb_max > (4.0 / 255.0)
+    near_white_bg = (rgb_mean >= 0.94) & (chroma <= 0.055)
+    source_mask = (alpha > float(lock_alpha_threshold)) & non_black_source & (~near_white_bg)
 
-    if source_rgba.ndim == 2:
-        source_mask = source_rgba[:, 3] > float(lock_alpha_threshold)
-        out[source_mask] = source_rgba[source_mask]
-        print(
-            f"Composite order: source inside / fill outside | "
-            f"flat_pixels={out.shape[0]} protected_pixels={int(source_mask.sum())}"
-        )
-        return np.clip(out, 0.0, 1.0).astype(np.float32).reshape(-1)
+    inside_diff = np.abs(out_flat[source_mask, 0:3] - src_flat[source_mask, 0:3])
+    mean_diff = float(inside_diff.mean() * 255.0) if inside_diff.size else 0.0
+    max_diff = float(inside_diff.max() * 255.0) if inside_diff.size else 0.0
 
-    raise ValueError(
-        f"compose_lock_over_fill: unexpected normalized ndim {source_rgba.ndim}"
+    print(
+        "Composite mode: corrected Layer 1 above source | "
+        f"protected_pixels={int(source_mask.sum())} "
+        f"inside_mean_diff_255={mean_diff:.6f} "
+        f"inside_max_diff_255={max_diff:.6f}"
     )
 
-
-    def infer_shape(a, b):
-        aa = np.asarray(a)
-        bb = np.asarray(b)
-
-        for arr in (aa, bb):
-            if arr.ndim == 3 and arr.shape[2] in (3, 4):
-                return (int(arr.shape[0]), int(arr.shape[1]), 4)
-
-        # Known current sword atlas: 2774368 = 1448 * 479 * 4
-        for arr in (aa, bb):
-            if arr.ndim == 1 and arr.size == 2774368:
-                return (1448, 479, 4)
-
-        for arr in (aa, bb):
-            if arr.ndim == 1 and arr.size % 4 == 0:
-                pixels = arr.size // 4
-                root = int(np.sqrt(pixels))
-                candidates = []
-                for w in range(1, root + 1):
-                    if pixels % w == 0:
-                        h = pixels // w
-                        ratio = max(w, h) / max(1, min(w, h))
-                        if 1.5 <= ratio <= 8.0:
-                            candidates.append((abs(ratio - 3.0), min(w, h), max(w, h)))
-                if candidates:
-                    candidates.sort(key=lambda x: (x[0], -x[1]))
-                    _, w, h = candidates[0]
-                    return (int(h), int(w), 4)
-
-        raise ValueError(f"could not infer RGBA shape. source shape={np.asarray(source_lock_img).shape}, fill shape={np.asarray(fill_img).shape}")
-
-    def to_rgba_float(value, shape, label):
-        arr = np.asarray(value).astype(np.float32)
-
-        if arr.ndim == 1:
-            expected = int(np.prod(shape))
-            if arr.size != expected:
-                raise ValueError(f"{label} wrong flat size: got {arr.size}, expected {expected}")
-            arr = arr.reshape(shape)
-
-        elif arr.ndim == 3:
-            if arr.shape[2] == 3:
-                alpha = np.ones((arr.shape[0], arr.shape[1], 1), dtype=np.float32)
-                arr = np.concatenate([arr, alpha], axis=2)
-            elif arr.shape[2] != 4:
-                raise ValueError(f"{label} unsupported channels: {arr.shape}")
-        else:
-            raise ValueError(f"{label} unsupported shape: {arr.shape}")
-
-        if arr.size and float(np.nanmax(arr)) > 1.5:
-            arr = arr / 255.0
-
-        return np.clip(arr, 0.0, 1.0)
-
-    shape = infer_shape(fill_img, source_lock_img)
-
-    source = to_rgba_float(source_lock_img, shape, "source_lock_img")
-    fill = to_rgba_float(fill_img, shape, "fill_img")
-
-    # Source image as base.
-    out = source.copy()
-
-    # Layer1 above source.
-    alpha = np.clip(fill[:, :, 3:4], 0.0, 1.0)
-    out[:, :, 0:3] = source[:, :, 0:3] * (1.0 - alpha) + fill[:, :, 0:3] * alpha
-    out[:, :, 3] = np.maximum(source[:, :, 3], fill[:, :, 3])
-
-    print(f"Composite order: source base + layer1 above | shape={shape} fill_alpha_pixels={int((fill[:, :, 3] > lock_alpha_threshold).sum())}")
-
     return np.clip(out, 0.0, 1.0).astype(np.float32).reshape(-1)
-
 
 def build_material(material_name, texture_image, uv_name, use_alpha=True):
     mat = bpy.data.materials.new(material_name)
@@ -1020,13 +937,314 @@ def export_glb(output_path):
     )
 
 
+
+def preserve_source_inside_layer1(source_pixels, fill_pixels, width, height, lock_alpha_threshold=0.02, source_edge_px=4.0):
+    """
+    Layer 1 postprocess with ONE visible control variable.
+
+    Correct formula:
+        source base
+        + generated fill outside the outer silhouette
+        + clean outer-edge-derived fill over Source edge px band
+
+    Important:
+    The edge overlay fill is NOT sampled from the current source pixel.
+    It is sampled from the OUTER silhouette edge, then moved inward by SOURCE_INSET_PX.
+    This prevents the original purple edge line from being copied back at the same location.
+    """
+    import numpy as np
+    from collections import deque
+
+    width = int(width)
+    height = int(height)
+    edge_px = max(int(round(float(source_edge_px))), 0)
+    source_inset_px = max(float(globals().get("SOURCE_INSET_PX", 0.0)), 0.0)
+
+    source = np.asarray(source_pixels, dtype=np.float32).reshape((height, width, 4))
+    fill = np.asarray(fill_pixels, dtype=np.float32).reshape((height, width, 4))
+
+    if source.size and float(np.nanmax(source)) > 1.5:
+        source = source / 255.0
+    if fill.size and float(np.nanmax(fill)) > 1.5:
+        fill = fill / 255.0
+
+    source = np.clip(source, 0.0, 1.0)
+    fill = np.clip(fill, 0.0, 1.0)
+
+    rgb = source[:, :, :3]
+    alpha = source[:, :, 3]
+
+    yy, xx = np.indices((height, width), dtype=np.int32)
+
+    def flood_from_border(passable):
+        visited = np.zeros(passable.shape, dtype=bool)
+        q = deque()
+        h, w = passable.shape
+
+        for x in range(w):
+            if passable[0, x]:
+                visited[0, x] = True
+                q.append((0, x))
+            if passable[h - 1, x]:
+                visited[h - 1, x] = True
+                q.append((h - 1, x))
+
+        for y in range(h):
+            if passable[y, 0]:
+                visited[y, 0] = True
+                q.append((y, 0))
+            if passable[y, w - 1]:
+                visited[y, w - 1] = True
+                q.append((y, w - 1))
+
+        while q:
+            y, x = q.popleft()
+            for ny, nx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
+                if 0 <= ny < h and 0 <= nx < w and passable[ny, nx] and not visited[ny, nx]:
+                    visited[ny, nx] = True
+                    q.append((ny, nx))
+
+        return visited
+
+    def fill_holes(mask):
+        outside = flood_from_border(~mask)
+        return ~outside
+
+    def erode8(mask):
+        up = np.zeros_like(mask, dtype=bool)
+        down = np.zeros_like(mask, dtype=bool)
+        left = np.zeros_like(mask, dtype=bool)
+        right = np.zeros_like(mask, dtype=bool)
+        ul = np.zeros_like(mask, dtype=bool)
+        ur = np.zeros_like(mask, dtype=bool)
+        dl = np.zeros_like(mask, dtype=bool)
+        dr = np.zeros_like(mask, dtype=bool)
+
+        up[1:, :] = mask[:-1, :]
+        down[:-1, :] = mask[1:, :]
+        left[:, 1:] = mask[:, :-1]
+        right[:, :-1] = mask[:, 1:]
+        ul[1:, 1:] = mask[:-1, :-1]
+        ur[1:, :-1] = mask[:-1, 1:]
+        dl[:-1, 1:] = mask[1:, :-1]
+        dr[:-1, :-1] = mask[1:, 1:]
+
+        return mask & up & down & left & right & ul & ur & dl & dr
+
+    def shifted_int(a, dy, dx, fill_value):
+        out = np.full_like(a, fill_value)
+
+        if dy >= 0:
+            sy0, sy1 = 0, height - dy
+            dy0, dy1 = dy, height
+        else:
+            sy0, sy1 = -dy, height
+            dy0, dy1 = 0, height + dy
+
+        if dx >= 0:
+            sx0, sx1 = 0, width - dx
+            dx0, dx1 = dx, width
+        else:
+            sx0, sx1 = -dx, width
+            dx0, dx1 = 0, width + dx
+
+        if sy1 > sy0 and sx1 > sx0:
+            out[dy0:dy1, dx0:dx1] = a[sy0:sy1, sx0:sx1]
+
+        return out
+
+    def bilinear_sample(img, xs, ys):
+        xs = np.clip(xs, 0.0, width - 1.0)
+        ys = np.clip(ys, 0.0, height - 1.0)
+
+        x0 = np.floor(xs).astype(np.int32)
+        y0 = np.floor(ys).astype(np.int32)
+        x1 = np.clip(x0 + 1, 0, width - 1)
+        y1 = np.clip(y0 + 1, 0, height - 1)
+
+        wx = (xs - x0).astype(np.float32)[:, None]
+        wy = (ys - y0).astype(np.float32)[:, None]
+
+        c00 = img[y0, x0]
+        c10 = img[y0, x1]
+        c01 = img[y1, x0]
+        c11 = img[y1, x1]
+
+        c0 = c00 * (1.0 - wx) + c10 * wx
+        c1 = c01 * (1.0 - wx) + c11 * wx
+        return c0 * (1.0 - wy) + c1 * wy
+
+    # Build solid outer silhouette.
+    alpha_mask = alpha > float(lock_alpha_threshold)
+    alpha_ratio = float(alpha_mask.mean())
+
+    if 0.02 <= alpha_ratio <= 0.98:
+        silhouette = alpha_mask.copy()
+        silhouette_source = "alpha"
+    else:
+        rgb_max = rgb.max(axis=2)
+        rgb_min = rgb.min(axis=2)
+        rgb_mean = rgb.mean(axis=2)
+        chroma = rgb_max - rgb_min
+
+        near_black_bg = rgb_max <= (4.0 / 255.0)
+        near_white_bg = (rgb_mean >= 0.94) & (chroma <= 0.055)
+        background_candidate = near_black_bg | near_white_bg | (alpha <= float(lock_alpha_threshold))
+
+        outside_background = flood_from_border(background_candidate)
+        silhouette = ~outside_background
+        silhouette_source = "border_flood"
+
+    silhouette = fill_holes(silhouette)
+
+    outer_shell = silhouette & (~erode8(silhouette))
+
+    # Nearest OUTER shell for every pixel.
+    nearest_y = np.where(outer_shell, yy, -1).astype(np.int32)
+    nearest_x = np.where(outer_shell, xx, -1).astype(np.int32)
+    best_d2 = np.where(outer_shell, 0.0, np.inf).astype(np.float32)
+
+    max_dim = max(width, height)
+    step = 1
+    while step < max_dim:
+        step *= 2
+    step //= 2
+
+    while step >= 1:
+        for dy in (-step, 0, step):
+            for dx in (-step, 0, step):
+                if dx == 0 and dy == 0:
+                    continue
+
+                cand_y = shifted_int(nearest_y, dy, dx, -1)
+                cand_x = shifted_int(nearest_x, dy, dx, -1)
+
+                valid = (cand_y >= 0) & (cand_x >= 0)
+                if not np.any(valid):
+                    continue
+
+                d2 = (yy - cand_y).astype(np.float32) ** 2 + (xx - cand_x).astype(np.float32) ** 2
+                take = valid & (d2 < best_d2)
+
+                nearest_y[take] = cand_y[take]
+                nearest_x[take] = cand_x[take]
+                best_d2[take] = d2[take]
+
+        step //= 2
+
+    dist = np.sqrt(np.maximum(best_d2, 0.0)).astype(np.float32)
+
+    # Correct order:
+    # source base, fill outside, clean edge fill inside edge band.
+    out = source.copy()
+
+    outside = ~silhouette
+    out[outside, :3] = fill[outside, :3]
+    out[outside, 3] = fill[outside, 3]
+
+    edge_band_mask = np.zeros_like(silhouette, dtype=bool)
+    blended_pixels = 0
+
+    if edge_px > 0 and np.any(silhouette):
+        current = silhouette.copy()
+
+        for i in range(edge_px):
+            eroded = erode8(current)
+            shell = current & (~eroded)
+
+            if np.any(shell):
+                edge_band_mask |= shell
+                blended_pixels += int(shell.sum())
+
+            current = eroded
+            if not np.any(current):
+                break
+
+    if np.any(edge_band_mask):
+        ey = nearest_y[edge_band_mask].astype(np.float32)
+        ex = nearest_x[edge_band_mask].astype(np.float32)
+
+        py = yy[edge_band_mask].astype(np.float32)
+        px = xx[edge_band_mask].astype(np.float32)
+
+        # Direction from outer edge toward current pixel / center.
+        vx = px - ex
+        vy = py - ey
+        vd = np.sqrt(vx * vx + vy * vy)
+
+        safe = vd > 1e-6
+
+        # For the outermost shell, use direction from texture center as fallback.
+        cx = width * 0.5
+        cy = height * 0.5
+        fallback_vx = px - cx
+        fallback_vy = py - cy
+        fallback_d = np.sqrt(fallback_vx * fallback_vx + fallback_vy * fallback_vy)
+        fallback_safe = fallback_d > 1e-6
+
+        vx[safe] /= vd[safe]
+        vy[safe] /= vd[safe]
+
+        vx[~safe & fallback_safe] = -fallback_vx[~safe & fallback_safe] / fallback_d[~safe & fallback_safe]
+        vy[~safe & fallback_safe] = -fallback_vy[~safe & fallback_safe] / fallback_d[~safe & fallback_safe]
+
+        vx[~safe & ~fallback_safe] = 0.0
+        vy[~safe & ~fallback_safe] = 1.0
+
+        # Sample clean color at sourceInsetPx from the OUTER silhouette edge.
+        sample_distance = max(source_inset_px, 0.0)
+        sx = ex + vx * sample_distance
+        sy = ey + vy * sample_distance
+
+        clean_edge_rgb = bilinear_sample(rgb, sx, sy)
+
+        # Blend amount by distance from outer edge:
+        # 0 px from edge => clean fill strongest.
+        # sourceEdgePx px inward => source strongest.
+        d = dist[edge_band_mask].astype(np.float32)
+        t = 1.0 - np.clip(d / max(float(edge_px), 1.0), 0.0, 1.0)
+        t = t[:, None]
+
+        out[edge_band_mask, :3] = (
+            source[edge_band_mask, :3] * (1.0 - t)
+            + clean_edge_rgb * t
+        )
+        out[edge_band_mask, 3] = np.maximum(source[edge_band_mask, 3], fill[edge_band_mask, 3])
+
+    deep_mask = silhouette & (~edge_band_mask)
+
+    edge_diff = np.abs(out[edge_band_mask, :3] - source[edge_band_mask, :3]) * 255.0
+    deep_diff = np.abs(out[deep_mask, :3] - source[deep_mask, :3]) * 255.0
+
+    edge_mean = float(edge_diff.mean()) if edge_diff.size else 0.0
+    edge_max = float(edge_diff.max()) if edge_diff.size else 0.0
+    deep_mean = float(deep_diff.mean()) if deep_diff.size else 0.0
+    deep_max = float(deep_diff.max()) if deep_diff.size else 0.0
+
+    print(
+        "Layer 1 formula: SOURCE_BASE_PLUS_CLEAN_EDGE_FILL | "
+        f"source_edge_px={float(source_edge_px)} "
+        f"source_inset_px={source_inset_px} "
+        f"silhouette_source={silhouette_source} "
+        f"silhouette_pixels={int(silhouette.sum())} "
+        f"edge_overlay_pixels={blended_pixels} "
+        f"edge_mean_diff_255={edge_mean:.6f} "
+        f"edge_max_diff_255={edge_max:.6f} "
+        f"deep_mean_diff_255={deep_mean:.6f} "
+        f"deep_max_diff_255={deep_max:.6f}"
+    )
+
+    return np.clip(out, 0.0, 1.0).astype(np.float32).reshape(-1)
+
+
 def main():
     args = parse_args()
 
 
-    global EDGE_BAND_PX, SOURCE_INSET_PX, GRADIENT_SPAN_PX
+    global EDGE_BAND_PX, SOURCE_INSET_PX, SOURCE_EDGE_PX, GRADIENT_SPAN_PX
     EDGE_BAND_PX = float(getattr(args, "edge_band_px", 18.0))
     SOURCE_INSET_PX = float(getattr(args, "source_inset_px", 2.0))
+    SOURCE_EDGE_PX = float(getattr(args, "source_edge_px", 4.0))
     GRADIENT_SPAN_PX = float(getattr(args, "gradient_span_px", 28.0))
     output_dir = os.path.dirname(os.path.abspath(args.output_glb))
     os.makedirs(output_dir, exist_ok=True)
@@ -1079,6 +1297,15 @@ def main():
         expand_passes=args.warp_expand_passes,
     )
 
+    side_fill_pixels = preserve_source_inside_layer1(
+        source_lock_pixels,
+        side_fill_pixels,
+        target_w,
+        target_h,
+        lock_alpha_threshold=args.lock_alpha_threshold,
+        source_edge_px=args.source_edge_px,
+    )
+
     composite_pixels = compose_lock_over_fill(
         source_lock_pixels,
         side_fill_pixels,
@@ -1117,10 +1344,11 @@ def main():
         "sourceStats": source_stats,
         "materialStats": material_stats,
         "targetTextureSize": {"width": target_w, "height": target_h},
-        "compositeMode": "source_inside_fill_outside",
+        "compositeMode": "corrected_layer1_above_source",
         "pixelGradientSettings": {
             "edgeBandPx": float(getattr(args, "edge_band_px", 18.0)),
             "sourceInsetPx": float(getattr(args, "source_inset_px", 2.0)),
+            "sourceEdgePx": float(getattr(args, "source_edge_px", 4.0)),
             "gradientSpanPx": float(getattr(args, "gradient_span_px", 28.0))
         },
         "warpSettings": {
@@ -1133,7 +1361,7 @@ def main():
             "warpAlphaThreshold": args.warp_alpha_threshold,
             "lockAlphaThreshold": args.lock_alpha_threshold,
         },
-        "important": "Layer 1 = fill / gradient. Final composite = source base + layer1 gradient above.",
+        "important": "Layer 1 uses source base plus clean edge fill sampled from the outer silhouette inward by Source inset px; Source edge px controls how far that clean fill overlays into the source.",
     }
 
     with open(args.output_report, "w", encoding="utf-8") as f:

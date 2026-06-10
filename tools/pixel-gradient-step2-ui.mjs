@@ -133,9 +133,10 @@ function promoteOutputs() {
 
 function runRetexture(payload) {
   return new Promise(resolve => {
-    const edgeBandPx = Number(payload.edgeBandPx ?? 20);
-    const sourceInsetPx = Number(payload.sourceInsetPx ?? 1);
-    const gradientSpanPx = Number(payload.gradientSpanPx ?? 20);
+    const edgeBandPx = Number(payload.edgeBandPx ?? 15);
+    const sourceInsetPx = Number(payload.sourceInsetPx ?? 10);
+    const sourceEdgePx = Number(payload.sourceEdgePx ?? 10);
+    const gradientSpanPx = Number(payload.gradientSpanPx ?? 15);
 
     const args = [
       "-b",
@@ -163,10 +164,11 @@ function runRetexture(payload) {
 
       "--edge-band-px", String(edgeBandPx),
       "--source-inset-px", String(sourceInsetPx),
+      "--source-edge-px", String(sourceEdgePx),
       "--gradient-span-px", String(gradientSpanPx)
     ];
 
-    console.log("[STEP2 RETEXTURE]", { edgeBandPx, sourceInsetPx, gradientSpanPx });
+    console.log("[STEP2 RETEXTURE]", { edgeBandPx, sourceInsetPx, sourceEdgePx, gradientSpanPx });
     console.log(args.join(" "));
 
     const started = Date.now();
@@ -206,7 +208,7 @@ function runRetexture(payload) {
         promoted,
         promoteError,
         durationMs: Date.now() - started,
-        requested: { edgeBandPx, sourceInsetPx, gradientSpanPx },
+        requested: { edgeBandPx, sourceInsetPx, sourceEdgePx, gradientSpanPx },
         model: pickModel(),
         stdout,
         stderr
@@ -420,19 +422,22 @@ img {
     <h2>Réglages</h2>
     <div class="grid">
       <label>Edge band px</label>
-      <input id="edgeBandPx" type="number" step="1" value="20">
+      <input id="edgeBandPx" type="number" step="1" value="15">
 
       <label>Source inset px</label>
-      <input id="sourceInsetPx" type="number" step="1" value="1">
+      <input id="sourceInsetPx" type="number" step="1" value="10">
+
+      <label>Source edge px</label>
+      <input id="sourceEdgePx" type="number" step="1" value="10">
 
       <label>Gradient span px</label>
-      <input id="gradientSpanPx" type="number" step="1" value="20">
+      <input id="gradientSpanPx" type="number" step="1" value="15">
     </div>
 
     <h2>Presets</h2>
-    <button onclick="preset(12,1,12)">Bord fin</button>
-    <button onclick="preset(20,1,20)">Bord moyen</button>
-    <button onclick="preset(32,2,32)">Bord large</button>
+    <button onclick="preset(10,5)">Bord fin</button>
+    <button onclick="preset(15,10)">Bord moyen</button>
+    <button onclick="preset(20,15)">Bord large</button>
 
     <h2>Actions</h2>
     <button id="retextureBtn" onclick="retexture()">Retexture</button>
@@ -494,14 +499,16 @@ function payloadFromUI() {
   return {
     edgeBandPx: parseNum("edgeBandPx"),
     sourceInsetPx: parseNum("sourceInsetPx"),
+    sourceEdgePx: parseNum("sourceEdgePx"),
     gradientSpanPx: parseNum("gradientSpanPx")
   };
 }
 
-window.preset = function(edge, inset, span) {
-  document.getElementById("edgeBandPx").value = edge;
-  document.getElementById("sourceInsetPx").value = inset;
-  document.getElementById("gradientSpanPx").value = span;
+window.preset = function(edgeAndGradient, sourceAndSourceEdge) {
+  document.getElementById("edgeBandPx").value = edgeAndGradient;
+  document.getElementById("gradientSpanPx").value = edgeAndGradient;
+  document.getElementById("sourceInsetPx").value = sourceAndSourceEdge;
+  document.getElementById("sourceEdgePx").value = sourceAndSourceEdge;
 };
 
 function msg(text) {
@@ -548,6 +555,7 @@ window.retexture = async function() {
         "Retexture OK en " + Math.round(data.durationMs / 1000) + "s\\n" +
         "edge=" + data.requested.edgeBandPx +
         " inset=" + data.requested.sourceInsetPx +
+        " sourceEdge=" + data.requested.sourceEdgePx +
         " span=" + data.requested.gradientSpanPx
       );
 

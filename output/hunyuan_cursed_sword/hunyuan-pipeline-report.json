@@ -1,10 +1,10 @@
 {
-  "mesh": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\mesh.glb",
-  "sourceImage": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\input\\cursed_sword_source_cropped.png",
-  "outputGlb": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\textured.pixel-gradient-step2.glb",
-  "outputTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\baked-texture.pixel-gradient-step2.png",
-  "sideTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\layer1.pixel-gradient-step2.png",
-  "sourceLockTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\source-lock.png",
+  "mesh": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\mesh.glb",
+  "sourceImage": "C:\\Users\\william\\Desktop\\Creation arme\\input\\cursed_sword_source_cropped.png",
+  "outputGlb": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\textured.pixel-gradient-step2.glb",
+  "outputTexture": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\baked-texture.pixel-gradient-step2.png",
+  "sideTexture": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\layer1.pixel-gradient-step2.png",
+  "sourceLockTexture": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\source-lock.png",
   "uvName": "ProjectedUV",
   "sourceStats": {
     "width": 479,
@@ -24,10 +24,12 @@
     "width": 479,
     "height": 1448
   },
+  "compositeMode": "corrected_layer1_above_source",
   "pixelGradientSettings": {
-    "edgeBandPx": 16.0,
-    "sourceInsetPx": 6.0,
-    "gradientSpanPx": 8.0
+    "edgeBandPx": 20.0,
+    "sourceInsetPx": 15.0,
+    "sourceEdgePx": 15.0,
+    "gradientSpanPx": 20.0
   },
   "warpSettings": {
     "warpUpscale": 1.0,
@@ -39,5 +41,5 @@
     "warpAlphaThreshold": 0.02,
     "lockAlphaThreshold": 0.02
   },
-  "important": "Layer 1 = fill / gradient. Final composite = source base + layer1 gradient above."
+  "important": "Layer 1 uses source base plus clean edge fill sampled from the outer silhouette inward by Source inset px; Source edge px controls how far that clean fill overlays into the source."
 }
