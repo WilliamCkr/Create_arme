@@ -1,46 +1,16 @@
 {
   "mesh": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\mesh.glb",
-  "sourceImageArg": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\input\\cursed_sword_source_cropped.png",
-  "lockedSourceTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\source-lock.png",
-  "outputGlb": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\textured.sidefill.ui.test.glb",
-  "outputTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\baked-texture.sidefill.ui.test.png",
-  "sideTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\algorithmic-side-fill.ui.test.png",
-  "uvNameSource": "ProjectedUV",
-  "uvNameSide": "SideUV",
-  "bounds": {
-    "min": [
-      -0.3417920470237732,
-      -0.1039755567908287,
-      -0.9995744824409485
-    ],
-    "max": [
-      0.3366168141365051,
-      0.10858359932899475,
-      0.9939134120941162
-    ],
-    "size": [
-      0.6784088611602783,
-      0.21255915611982346,
-      1.9934878945350647
-    ],
-    "depthAxis": 1,
-    "uAxis": 0,
-    "vAxis": 2
-  },
+  "sourceImage": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\input\\cursed_sword_source_cropped.png",
+  "outputGlb": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\textured.pixel-gradient-step2.glb",
+  "outputTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\baked-texture.pixel-gradient-step2.png",
+  "sideTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\layer1.pixel-gradient-step2.png",
+  "sourceLockTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\source-lock.png",
+  "uvName": "ProjectedUV",
   "sourceStats": {
-    "sourceLocked": true,
-    "whiteControlsIgnored": true,
-    "alphaControlsIgnored": true,
-    "message": "The visible source texture is loaded from source-lock.png and copied exactly where alpha is opaque. Transparent zones are filled by algorithm before GLB export.",
-    "composite": {
-      "width": 479,
-      "height": 1448,
-      "sourceKeptPixels": 279832,
-      "algorithmOnlyPixels": 413760,
-      "mixedPixels": 0,
-      "sourceLocked": true,
-      "exportableComposite": true
-    }
+    "width": 479,
+    "height": 1448,
+    "removedWhitePixels": 412918,
+    "keptPixelsApprox": 280674
   },
   "materialStats": {
     "sourceFaces": 143872,
@@ -50,20 +20,24 @@
     "useSourceBothFaces": true,
     "sourceFaceSign": 1
   },
-  "params": {
-    "sourceFaceThreshold": 0.3,
-    "sourceFaceSign": 1,
-    "useSourceBothFaces": true,
-    "sourceFlipU": false,
-    "sourceFlipV": false,
-    "sourceSwapUV": false,
-    "sideBase": 0.115,
-    "sideNoise": 0.115,
-    "sideHighlight": 0.12,
-    "sideCrack": 0.18,
-    "sidePurple": 0.22,
-    "sideEdgeDarkness": 0.2,
-    "sideWidth": 1024,
-    "sideHeight": 2048
-  }
+  "targetTextureSize": {
+    "width": 479,
+    "height": 1448
+  },
+  "pixelGradientSettings": {
+    "edgeBandPx": 16.0,
+    "sourceInsetPx": 6.0,
+    "gradientSpanPx": 8.0
+  },
+  "warpSettings": {
+    "warpUpscale": 1.0,
+    "warpStretchX": 1.0,
+    "warpStretchY": 1.0,
+    "warpContrast": 1.0,
+    "warpBrightness": 1.0,
+    "warpExpandPasses": 1,
+    "warpAlphaThreshold": 0.02,
+    "lockAlphaThreshold": 0.02
+  },
+  "important": "Layer 1 = fill / gradient. Final composite = source base + layer1 gradient above."
 }

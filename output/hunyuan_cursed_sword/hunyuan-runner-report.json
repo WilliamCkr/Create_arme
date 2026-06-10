@@ -1,13 +1,14 @@
 {
   "weaponId": "cursed_sword",
-  "sourceImage": "C:\\Users\\william\\Desktop\\Creation arme\\input\\cursed_sword_source.png",
-  "outputMesh": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\mesh.glb",
-  "outputDir": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword",
+  "sourceImage": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\input\\cursed_sword_source.png",
+  "outputMesh": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\mesh.glb",
+  "outputDir": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword",
   "modelPath": "tencent/Hunyuan3D-2mini",
   "subfolder": "hunyuan3d-dit-v2-mini-turbo",
   "device": "cuda",
   "numSteps": 30,
   "guidanceScale": 5.5,
-  "status": "ok",
-  "outputMeshSizeBytes": 2680752
+  "status": "error",
+  "error": "No module named 'torch'",
+  "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\tools\\hunyuan3d\\hunyuan_mesh_runner.py\", line 97, in main\n    import torch\nModuleNotFoundError: No module named 'torch'\n"
 }
