@@ -606,3 +606,48 @@ button.small {
     min-height: 300px;
   }
 }
+
+
+/* AOF_SIMPLE_DOWNLOAD_STEP3_V1 */
+.download-step-panel,
+.aof-download-preview {
+  padding: 18px;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 16px;
+  background: rgba(2, 8, 23, 0.58);
+}
+
+.download-step-panel h3,
+.aof-download-preview h2 {
+  margin: 0 0 8px 0;
+}
+
+.aof-download-preview p {
+  margin: 0 0 16px 0;
+  color: rgba(226, 232, 240, 0.72);
+}
+
+.download-step-button,
+.aof-download-preview__button {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 10px;
+  padding: 11px 13px;
+  border: 1px solid rgba(56, 189, 248, 0.34);
+  border-radius: 10px;
+  background: rgba(56, 189, 248, 0.14);
+  color: rgba(226, 232, 240, 0.96);
+  text-align: center;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.download-step-button.secondary,
+.aof-download-preview__button.secondary {
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.aof-download-preview__actions {
+  max-width: 360px;
+}

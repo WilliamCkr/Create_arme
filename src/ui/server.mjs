@@ -1073,32 +1073,66 @@ async function handleStaticAsset(req, res, pathname) {
 
 async function handleFileDownload(req, res, url) {
   const relPath = url.searchParams.get("path");
+
+  if (!relPath) {
+    sendJson(res, 400, { ok: false, error: "Missing file path." });
+    return;
+  }
+
+  let absPath;
   try {
-    const absPath = ensureAllowedRelativePath(relPath);
-    if (!(await exists(absPath))) {
-      sendJson(res, 404, { ok: false, error: "Not found" });
-      return;
-    }
-    const fileStats = await stat(absPath);
-    if (!fileStats.isFile()) {
-      sendJson(res, 404, { ok: false, error: "Not found" });
-      return;
-    }
-    res.writeHead(200, {
-      "Content-Type": mimeTypeFor(absPath),
-      "Cache-Control": "no-store"
-    });
-    const fileStream = createReadStream(absPath);
-    fileStream.on("error", () => {
-      if (!res.headersSent) {
-        sendJson(res, 404, { ok: false, error: "Not found" });
-      } else {
-        res.destroy();
-      }
-    });
-    fileStream.pipe(res);
+    absPath = ensureAllowedRelativePath(relPath);
   } catch (error) {
     sendJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    return;
+  }
+
+  try {
+    const fileStats = await stat(absPath);
+    if (!fileStats.isFile()) {
+      sendJson(res, 404, { ok: false, error: "File not found." });
+      return;
+    }
+
+    const data = await readFile(absPath);
+    const ext = path.extname(absPath).toLowerCase();
+
+    const contentTypes = {
+      ".glb": "model/gltf-binary",
+      ".gltf": "model/gltf+json",
+      ".png": "image/png",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".webp": "image/webp",
+      ".json": "application/json; charset=utf-8",
+      ".txt": "text/plain; charset=utf-8",
+      ".md": "text/markdown; charset=utf-8"
+    };
+
+    const requestedFilename = url.searchParams.get("filename") || path.basename(relPath);
+    const safeFilename = String(requestedFilename)
+      .replace(/[\r\n"]/g, "")
+      .replace(/[\\/:*?<>|]/g, "_")
+      .trim() || "download.bin";
+
+    const wantsDownload =
+      url.searchParams.get("download") === "1" ||
+      url.searchParams.has("filename");
+
+    const headers = {
+      "Content-Type": contentTypes[ext] || "application/octet-stream",
+      "Content-Length": String(fileStats.size),
+      "Cache-Control": "no-store"
+    };
+
+    if (wantsDownload) {
+      headers["Content-Disposition"] = `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`;
+    }
+
+    res.writeHead(200, headers);
+    res.end(data);
+  } catch (error) {
+    sendJson(res, 404, { ok: false, error: error instanceof Error ? error.message : String(error) });
   }
 }
 

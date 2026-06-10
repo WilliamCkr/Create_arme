@@ -36,26 +36,9 @@ const PIPELINE_MODES = {
 };
 
 const STEP_META = [
-  {
-    key: "source",
-    short: "Source",
-    title: "Source Image"
-  },
-  {
-    key: "model",
-    short: "3D + Texture",
-    title: "Generate 3D + Step 2 Texture"
-  },
-  {
-    key: "atlas",
-    short: "Atlas",
-    title: "Generate Weapon Atlas"
-  },
-  {
-    key: "export",
-    short: "Export",
-    title: "Export Arena Package"
-  }
+  { short: "Source", title: "Source Image", subtitle: "Source Image" },
+  { short: "3D + Texture", title: "Generate 3D + Step 2 Texture", subtitle: "Generate 3D + Step 2 Texture" },
+  { short: "Download", title: "Download Final Object", subtitle: "Download Final Object" }
 ];
 
 const state = {
@@ -739,23 +722,36 @@ function renderStepOptions() {
       <div class="subtle">Generate crée le mesh puis applique la Step 2 finale. Retexture réapplique seulement Pixel Gradient sur le mesh existant.</div>
     `;
   } else if (state.currentStepIndex === 2) {
-    const draft = state.formConfig ?? state.status?.config ?? {};
-    const presetName = draft.renderMode === "gameplay_2d"
-      ? (Math.abs(Number(draft.camera?.orthographicScale ?? 3)) <= 2.4 ? PRESETS.closeGameplay2d.name : PRESETS.gameplay2d.name)
-      : PRESETS.turntable3d.name;
+    const objectPath = "input/cursed_sword.glb";
+    const texturePath = "output/hunyuan_cursed_sword/baked-texture.png";
+    const step2Path = "output/hunyuan_cursed_sword/textured.pixel-gradient-step2.glb";
+
     el.stepOptions.innerHTML = `
-      <div class="preset-row">
-        <button id="presetGameplayButton" class="secondary small" type="button">Sword Gameplay 2D</button>
-        <button id="presetTurntableButton" class="secondary small" type="button">Sword Turntable 3D</button>
-        <button id="presetCloseGameplayButton" class="secondary small" type="button">Sword Close Gameplay 2D</button>
-      </div>
       <div class="status-grid">
-        <div>Preset</div><div>${escapeHtml(presetName)}</div>
-        <div>Frames</div><div>${escapeHtml(`${state.status?.counts?.expectedAngles ?? 0} angles`)}</div>
-        <div>Manifest</div><div>${escapeHtml(capitalize(manifestValidation()))}</div>
+        <div>Step</div><div>Download final object</div>
+        <div>Object GLB</div><div>${escapeHtml(objectPath)}</div>
+        <div>Texture</div><div>${escapeHtml(texturePath)}</div>
       </div>
-      <button id="generateAtlasButton" type="button" ${state.busy || !modelReady() ? "disabled" : ""}>Generate Frames &amp; Atlas</button>
-      <div class="subtle">This runs render frames, builds the atlas, and validates the manifest in one pass.</div>
+
+      <div class="download-step-panel">
+        <h3>Download final object</h3>
+        <p class="subtle">
+          Télécharge l’objet 3D final créé en Step 2. Pas d’atlas, pas de frames,
+          pas de turntable.
+        </p>
+
+        <a class="download-step-button" href="/api/file?path=${encodeURIComponent(objectPath)}&download=1&filename=cursed_sword.glb" download="cursed_sword.glb"="cursed_sword.glb">
+          Download GLB
+        </a>
+
+        <a class="download-step-button secondary" href="/api/file?path=${encodeURIComponent(texturePath)}&download=1&filename=baked-texture.png" download="baked-texture.png"="baked-texture.png">
+          Download texture PNG
+        </a>
+
+        <a class="download-step-button secondary" href="/api/file?path=${encodeURIComponent(step2Path)}&download=1&filename=textured.pixel-gradient-step2.glb" download="textured.pixel-gradient-step2.glb"="textured.pixel-gradient-step2.glb">
+          Download Step 2 GLB backup
+        </a>
+      </div>
     `;
   } else {
     el.stepOptions.innerHTML = `
@@ -1259,7 +1255,7 @@ function bindStepOptionActions(unlockedStep) {
   const generateAtlasButton = el.stepOptions.querySelector("#generateAtlasButton");
   if (generateAtlasButton) {
     generateAtlasButton.addEventListener("click", () => runAction("/api/generate-weapon-atlas", currentConfigFromForm(), "Generate Weapon Atlas", () => {
-      goToStep(3);
+      goToStep(2);
     }));
   }
 
@@ -1281,7 +1277,7 @@ function bindStepOptionActions(unlockedStep) {
   const exportArenaButton = el.stepOptions.querySelector("#exportArenaButton");
   if (exportArenaButton) {
     exportArenaButton.addEventListener("click", () => runAction("/api/export-arena-package", currentConfigFromForm(), "Export Arena Package", () => {
-      goToStep(3);
+      goToStep(2);
     }));
   }
 
@@ -1431,7 +1427,7 @@ function wireAdvancedInteractions() {
 
     if (action === "export-arena") {
       await runAction("/api/export-arena-package", currentConfigFromForm(), "Export Arena Package", () => {
-        goToStep(3);
+        goToStep(2);
       });
     }
   });

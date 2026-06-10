@@ -4,7 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Arena Object Forge</title>
-    <link rel="stylesheet" href="./styles.css" />\n  <script type="importmap">{"imports":{"three":"/vendor/three/three.module.js"}}</script>\n  <script type="importmap">{"imports":{"three":"/vendor/three/three.module.js"}}</script>\n  <script type="module" src="/vendor/model-viewer.min.js"></script>\n\n\n  <link rel="stylesheet" href="/aof-preview-manager-v2.css?v=step2-native-v1">\n</head>
+    <link rel="stylesheet" href="./styles.css?v=download-server-fix-v1" />
+  <script type="importmap">{"imports":{"three":"/vendor/three/three.module.js"}}</script>
+  <script type="importmap">{"imports":{"three":"/vendor/three/three.module.js"}}</script>
+  <script type="module" src="/vendor/model-viewer.min.js"></script>
+
+
+  <link rel="stylesheet" href="/aof-preview-manager-v2.css?v=simple-download-v3">
+</head>
   <body>
     <div class="app-shell">
       <header class="topbar">
@@ -14,7 +21,7 @@
           <p id="globalStatusLine">Loading workflow state...</p>
         </div>
         <div class="topbar-actions">
-          <span id="currentStepBadge" class="badge">Step 1 of 4</span>
+          <span id="currentStepBadge" class="badge">Step 1 of 3</span>
           <span id="connectionState" class="badge">Connecting</span>
           <span id="saveState" class="badge subtle">Idle</span>
           <button id="refreshButton" class="secondary" type="button">Refresh</button>
@@ -25,7 +32,7 @@
         <aside class="panel step-rail">
           <div class="panel-heading">
             <h2>Steps</h2>
-            <span id="workflowProgress" class="subtle">1 / 4</span>
+            <span id="workflowProgress" class="subtle">1 / 3</span>
           </div>
           <div id="stepList" class="step-list"></div>
         </aside>
@@ -67,6 +74,10 @@
       </details>
     </div>
 
-    <script type="module" src="./app.js?v=step2-native-v1"></script>
-\n\n\n  <script src="/aof-preview-manager-v2.js?v=step2-native-v1"></script>\n</body>
+    <script type="module" src="./app.js?v=download-server-fix-v1"></script>
+
+
+
+  <script src="/aof-preview-manager-v2.js?v=download-server-fix-v1"></script>
+</body>
 </html>
