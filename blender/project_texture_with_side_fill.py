@@ -63,6 +63,10 @@ def parse_args():
     p.add_argument("--source-edge-px", type=float, default=4.0)
 
     p.add_argument("--gradient-span-px", type=float, default=28.0)
+    p.add_argument("--material-roughness", type=float, default=0.88)
+    p.add_argument("--material-metallic", type=float, default=0.35)
+    p.add_argument("--material-specular", type=float, default=0.12)
+    p.add_argument("--texture-contrast", type=float, default=1.0)
 
     return p.parse_args(argv)
 
@@ -836,7 +840,7 @@ def compose_lock_over_fill(source_lock_pixels, layer1_pixels, lock_alpha_thresho
 
     return np.clip(out, 0.0, 1.0).astype(np.float32).reshape(-1)
 
-def build_material(material_name, texture_image, uv_name, use_alpha=True):
+def build_material(material_name, texture_image, uv_name, use_alpha=True, material_roughness=0.88, material_metallic=0.35, material_specular=0.12):
     mat = bpy.data.materials.new(material_name)
     mat.use_nodes = True
 
@@ -852,6 +856,27 @@ def build_material(material_name, texture_image, uv_name, use_alpha=True):
 
     bsdf = nodes.new("ShaderNodeBsdfPrincipled")
     bsdf.location = (220, 0)
+
+    # STEP2_SAFE_MATERIAL_EXPORT_V1
+    def step2_set_bsdf(names, value):
+        for name in names:
+            if name in bsdf.inputs:
+                bsdf.inputs[name].default_value = value
+                return True
+        return False
+
+    material_roughness = max(0.0, min(1.0, float(material_roughness)))
+    material_metallic = max(0.0, min(1.0, float(material_metallic)))
+    material_specular = max(0.0, min(1.0, float(material_specular)))
+
+    step2_set_bsdf(["Roughness"], material_roughness)
+    step2_set_bsdf(["Metallic"], material_metallic)
+    step2_set_bsdf(["Specular IOR Level", "Specular"], material_specular)
+
+    if "Emission Color" in bsdf.inputs:
+        bsdf.inputs["Emission Color"].default_value = (0.0, 0.0, 0.0, 1.0)
+    if "Emission Strength" in bsdf.inputs:
+        bsdf.inputs["Emission Strength"].default_value = 0.0
 
     tex = nodes.new("ShaderNodeTexImage")
     tex.location = (-150, 0)
@@ -1237,6 +1262,52 @@ def preserve_source_inside_layer1(source_pixels, fill_pixels, width, height, loc
     return np.clip(out, 0.0, 1.0).astype(np.float32).reshape(-1)
 
 
+
+
+def apply_texture_contrast_pixels(pixels, contrast, width, height):
+    """
+    Apply contrast directly to RGBA texture pixels.
+    contrast = 1.0 keeps the texture unchanged.
+    Only RGB is modified; alpha is preserved.
+    """
+    import numpy as np
+
+    contrast = float(contrast)
+    if abs(contrast - 1.0) < 1e-6:
+        return pixels
+
+    width = int(width)
+    height = int(height)
+
+    arr = np.asarray(pixels, dtype=np.float32).reshape((height, width, 4))
+
+    scale_255 = False
+    if arr.size and float(np.nanmax(arr)) > 1.5:
+        arr = arr / 255.0
+        scale_255 = True
+
+    arr = np.clip(arr, 0.0, 1.0)
+
+    rgb = arr[:, :, :3]
+    alpha = arr[:, :, 3:4]
+
+    # Contrast around middle gray.
+    rgb = (rgb - 0.5) * contrast + 0.5
+    rgb = np.clip(rgb, 0.0, 1.0)
+
+    out = np.concatenate([rgb, alpha], axis=2).astype(np.float32)
+
+    print(
+        "Texture contrast: "
+        f"contrast={contrast:.3f}"
+    )
+
+    if scale_255:
+        return np.clip(out * 255.0, 0.0, 255.0).reshape(-1)
+
+    return out.reshape(-1)
+
+
 def main():
     args = parse_args()
 
@@ -1312,14 +1383,21 @@ def main():
         lock_alpha_threshold=args.lock_alpha_threshold,
     )
 
+    composite_pixels = apply_texture_contrast_pixels(
+        composite_pixels,
+        getattr(args, "texture_contrast", 1.0),
+        target_w,
+        target_h,
+    )
+
     source_lock_path = os.path.join(output_dir, "source-lock.png")
 
     source_lock_img = save_image("AOF_SourceLock", target_w, target_h, source_lock_pixels, source_lock_path)
     side_fill_img = save_image("AOF_SideFillWarped", target_w, target_h, side_fill_pixels, args.side_texture)
     composite_img = save_image("AOF_CompositeSideTexture", target_w, target_h, composite_pixels, args.output_texture)
 
-    source_mat = build_material("AOF_SourceComposite_Mat", composite_img, uv_name, use_alpha=False)
-    side_mat = build_material("AOF_CompositeSide_Mat", composite_img, uv_name, use_alpha=False)
+    source_mat = build_material("AOF_SourceComposite_Mat", composite_img, uv_name, use_alpha=False, material_roughness=args.material_roughness, material_metallic=args.material_metallic, material_specular=args.material_specular)
+    side_mat = build_material("AOF_CompositeSide_Mat", composite_img, uv_name, use_alpha=False, material_roughness=args.material_roughness, material_metallic=args.material_metallic, material_specular=args.material_specular)
 
     material_stats = assign_materials_by_normal(
         obj=obj,
@@ -1350,6 +1428,14 @@ def main():
             "sourceInsetPx": float(getattr(args, "source_inset_px", 2.0)),
             "sourceEdgePx": float(getattr(args, "source_edge_px", 4.0)),
             "gradientSpanPx": float(getattr(args, "gradient_span_px", 28.0))
+        },
+        "textureSettings": {
+            "contrast": args.texture_contrast
+        },
+        "materialSettings": {
+            "roughness": args.material_roughness,
+            "metallic": args.material_metallic,
+            "specular": args.material_specular
         },
         "warpSettings": {
             "warpUpscale": args.warp_upscale,

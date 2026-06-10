@@ -137,6 +137,11 @@ function runRetexture(payload) {
     const sourceInsetPx = Number(payload.sourceInsetPx ?? 10);
     const sourceEdgePx = Number(payload.sourceEdgePx ?? 10);
     const gradientSpanPx = Number(payload.gradientSpanPx ?? 15);
+    const materialBrightness = Number(payload.materialBrightness ?? 0.85);
+    const materialRoughness = Number(payload.materialRoughness ?? 0.88);
+    const materialMetallic = Number(payload.materialMetallic ?? 0.35);
+    const materialSpecular = Number(payload.materialSpecular ?? 0.12);
+    const textureContrast = Number(payload.textureContrast ?? 1.0);
 
     const args = [
       "-b",
@@ -165,10 +170,14 @@ function runRetexture(payload) {
       "--edge-band-px", String(edgeBandPx),
       "--source-inset-px", String(sourceInsetPx),
       "--source-edge-px", String(sourceEdgePx),
-      "--gradient-span-px", String(gradientSpanPx)
+      "--gradient-span-px", String(gradientSpanPx),
+      "--material-roughness", String(materialRoughness),
+      "--material-metallic", String(materialMetallic),
+      "--material-specular", String(materialSpecular),
+      "--texture-contrast", String(textureContrast)
     ];
 
-    console.log("[STEP2 RETEXTURE]", { edgeBandPx, sourceInsetPx, sourceEdgePx, gradientSpanPx });
+    console.log("[STEP2 RETEXTURE]", {edgeBandPx, sourceInsetPx, sourceEdgePx, gradientSpanPx, materialBrightness, materialRoughness, materialMetallic, materialSpecular, textureContrast});
     console.log(args.join(" "));
 
     const started = Date.now();
@@ -208,7 +217,7 @@ function runRetexture(payload) {
         promoted,
         promoteError,
         durationMs: Date.now() - started,
-        requested: { edgeBandPx, sourceInsetPx, sourceEdgePx, gradientSpanPx },
+        requested: {edgeBandPx, sourceInsetPx, sourceEdgePx, gradientSpanPx, materialBrightness, materialRoughness, materialMetallic, materialSpecular, textureContrast},
         model: pickModel(),
         stdout,
         stderr
@@ -445,7 +454,53 @@ img {
     <button onclick="openOutputFolder()">Open output</button>
 
     <div id="message">Ready.</div>
-  </aside>
+  
+    <!-- STEP2_SAFE_MATERIAL_PANEL_V1 -->
+    <h2>Matiere / Lumiere</h2>
+    <div class="grid">
+      <label>Brightness</label>
+      <input id="materialBrightness" type="number" min="0.30" max="2.00" step="0.01" value="0.85">
+
+      <label>Roughness</label>
+      <input id="materialRoughness" type="number" min="0.00" max="1.00" step="0.01" value="0.88">
+
+      <label>Metallic</label>
+      <input id="materialMetallic" type="number" min="0.00" max="1.00" step="0.01" value="0.35">
+
+      <label>Specular</label>
+      <input id="materialSpecular" type="number" min="0.00" max="1.00" step="0.01" value="0.12">
+
+      <label>Texture contrast</label>
+      <input id="textureContrast" type="number" min="0.50" max="2.50" step="0.05" value="1.00">
+    </div>
+    <div class="presets">
+      <button onclick="materialPreset(0.80,0.94,0.20,0.08,1.10)">Mat</button>
+      <button onclick="materialPreset(0.85,0.88,0.35,0.12,1.15)">Equilibre</button>
+      <button onclick="materialPreset(0.90,0.78,0.50,0.18,1.20)">Metal doux</button>
+    </div>
+
+    <h2>Lumiere viewer</h2>
+    <div class="grid">
+      <label>Ambient</label>
+      <input id="lightAmbient" type="number" min="0.00" max="3.00" step="0.05" value="0.85">
+
+      <label>Front</label>
+      <input id="lightFront" type="number" min="0.00" max="5.00" step="0.05" value="1.10">
+
+      <label>Back</label>
+      <input id="lightBack" type="number" min="0.00" max="5.00" step="0.05" value="1.00">
+
+      <label>Top</label>
+      <input id="lightTop" type="number" min="0.00" max="5.00" step="0.05" value="0.50">
+    </div>
+    <div class="presets">
+      <button onclick="lightPreset(0.55,0.75,0.55,0.25,0.75)">Soft</button>
+      <button onclick="lightPreset(0.85,1.10,1.00,0.50,0.85)">Neutre</button>
+      <button onclick="lightPreset(0.65,1.45,1.20,0.65,0.90)">Studio</button>
+      <button onclick="lightPreset(0.35,1.80,0.80,0.35,0.90)">Contraste</button>
+    </div>
+
+</aside>
 
   <main class="workspace">
     <section class="previewGrid">
@@ -500,7 +555,12 @@ function payloadFromUI() {
     edgeBandPx: parseNum("edgeBandPx"),
     sourceInsetPx: parseNum("sourceInsetPx"),
     sourceEdgePx: parseNum("sourceEdgePx"),
-    gradientSpanPx: parseNum("gradientSpanPx")
+    gradientSpanPx: parseNum("gradientSpanPx"),
+    materialBrightness: parseNum("materialBrightness"),
+    materialRoughness: parseNum("materialRoughness"),
+    materialMetallic: parseNum("materialMetallic"),
+    materialSpecular: parseNum("materialSpecular"),
+    textureContrast: parseNum("textureContrast")
   };
 }
 
@@ -591,7 +651,7 @@ function init3D() {
   key.position.set(3, 5, 4);
   scene.add(key);
 
-  const rim = new THREE.DirectionalLight(0x8a6cff, 1.1);
+  const rim = new THREE.DirectionalLight(0xffffff, 1.1);
   rim.position.set(-4, 2, -3);
   scene.add(rim);
 
@@ -690,6 +750,170 @@ function animate() {
 
 refreshImages();
 init3D();
+
+/* STEP2_SAFE_MATERIAL_LIGHT_VIEWER_V1 */
+function step2SafeNum(id, fallback) {
+  const el = document.getElementById(id);
+  if (!el) return fallback;
+  const v = Number(el.value);
+  return Number.isFinite(v) ? v : fallback;
+}
+
+function step2SafeClamp(v, a, b) {
+  return Math.max(a, Math.min(b, v));
+}
+
+function step2SafeMaterialState() {
+  return {
+    brightness: step2SafeClamp(step2SafeNum("materialBrightness", 0.85), 0.30, 2.00),
+    roughness: step2SafeClamp(step2SafeNum("materialRoughness", 0.88), 0.00, 1.00),
+    metallic: step2SafeClamp(step2SafeNum("materialMetallic", 0.35), 0.00, 1.00),
+    specular: step2SafeClamp(step2SafeNum("materialSpecular", 0.12), 0.00, 1.00)
+  };
+}
+
+function step2SafeRemoveLights() {
+  if (typeof scene === "undefined" || !scene) return;
+  const lights = [];
+  scene.traverse((obj) => {
+    if (obj && obj.isLight) lights.push(obj);
+  });
+  for (const light of lights) {
+    if (light.parent) light.parent.remove(light);
+  }
+}
+
+
+function step2SafeInstallNeutralLights() {
+  if (typeof scene === "undefined" || !scene || typeof THREE === "undefined") return;
+
+  step2SafeRemoveLights();
+
+  const brightness = step2SafeClamp(step2SafeNum("materialBrightness", 0.85), 0.30, 2.00);
+  const ambientValue = step2SafeClamp(step2SafeNum("lightAmbient", 0.85), 0.00, 3.00);
+  const frontValue = step2SafeClamp(step2SafeNum("lightFront", 1.10), 0.00, 5.00);
+  const backValue = step2SafeClamp(step2SafeNum("lightBack", 1.00), 0.00, 5.00);
+  const topValue = step2SafeClamp(step2SafeNum("lightTop", 0.50), 0.00, 5.00);
+
+  const ambient = new THREE.AmbientLight(0xffffff, ambientValue);
+  scene.add(ambient);
+
+  const front = new THREE.DirectionalLight(0xffffff, frontValue);
+  front.position.set(2.2, 2.0, 3.0);
+  scene.add(front);
+
+  const back = new THREE.DirectionalLight(0xffffff, backValue);
+  back.position.set(-2.2, 1.7, -3.0);
+  scene.add(back);
+
+  const top = new THREE.DirectionalLight(0xffffff, topValue);
+  top.position.set(0.0, 3.5, 0.0);
+  scene.add(top);
+
+  if (typeof renderer !== "undefined" && renderer && "toneMappingExposure" in renderer) {
+    renderer.toneMappingExposure = brightness;
+  }
+}
+
+
+function step2SafeApplyMaterial(root) {
+  if (typeof THREE === "undefined") return;
+
+  const state = step2SafeMaterialState();
+  const host = root || (
+    typeof currentSword !== "undefined" && currentSword
+      ? currentSword
+      : typeof scene !== "undefined"
+        ? scene
+        : null
+  );
+
+  if (!host) return;
+
+  host.traverse((obj) => {
+    if (!obj || !obj.isMesh || !obj.material) return;
+
+    const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+
+    for (const mat of materials) {
+      if (!mat) continue;
+
+      if ("roughness" in mat) mat.roughness = state.roughness;
+      if ("metalness" in mat) mat.metalness = state.metallic;
+      if ("specularIntensity" in mat) mat.specularIntensity = state.specular;
+      if ("envMapIntensity" in mat) mat.envMapIntensity = 0.08;
+
+      if (mat.emissive) mat.emissive.setRGB(0, 0, 0);
+      if ("emissiveIntensity" in mat) mat.emissiveIntensity = 0;
+
+      mat.needsUpdate = true;
+    }
+  });
+}
+
+function step2SafeApplyViewerTuning() {
+  try {
+    step2SafeInstallNeutralLights();
+    step2SafeApplyMaterial();
+  } catch (err) {
+    console.warn("step2SafeApplyViewerTuning failed", err);
+  }
+}
+
+function materialPreset(brightness, roughness, metallic, specular, contrast = 1.0) {
+  const values = {
+    materialBrightness: brightness,
+    materialRoughness: roughness,
+    materialMetallic: metallic,
+    materialSpecular: specular,
+    textureContrast: contrast
+  };
+
+  for (const id of Object.keys(values)) {
+    const el = document.getElementById(id);
+    if (el) el.value = values[id];
+  }
+
+  step2SafeApplyViewerTuning();
+}
+window.materialPreset = materialPreset;
+
+
+function lightPreset(ambient, front, back, top, brightness) {
+  const values = {
+    lightAmbient: ambient,
+    lightFront: front,
+    lightBack: back,
+    lightTop: top,
+    materialBrightness: brightness
+  };
+
+  for (const id of Object.keys(values)) {
+    const el = document.getElementById(id);
+    if (el) el.value = values[id];
+  }
+
+  step2SafeApplyViewerTuning();
+}
+window.lightPreset = lightPreset;
+
+function step2SafeBindMaterialControls() {
+  const ids = ["materialBrightness", "materialRoughness", "materialMetallic", "materialSpecular", "textureContrast", "lightAmbient", "lightFront", "lightBack", "lightTop"];
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.step2SafeMaterialBound === "1") continue;
+    el.dataset.step2SafeMaterialBound = "1";
+    el.addEventListener("input", step2SafeApplyViewerTuning);
+    el.addEventListener("change", step2SafeApplyViewerTuning);
+  }
+}
+
+step2SafeBindMaterialControls();
+setTimeout(step2SafeApplyViewerTuning, 50);
+setTimeout(step2SafeApplyViewerTuning, 250);
+setTimeout(step2SafeApplyViewerTuning, 800);
+
+
 </script>
 </body>
 </html>`;
