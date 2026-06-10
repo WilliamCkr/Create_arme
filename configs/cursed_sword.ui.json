@@ -75,5 +75,16 @@
     "outputMesh": "output/hunyuan_cursed_sword/mesh.glb",
     "textureBakeResolution": 2048,
     "projectionMode": "smart_uv"
+  },
+  "step2PixelGradient": {
+    "edgeBandPx": 15,
+    "sourceInsetPx": 10,
+    "sourceEdgePx": 10,
+    "gradientSpanPx": 15,
+    "materialBrightness": 0.85,
+    "materialRoughness": 0.88,
+    "materialMetallic": 0.35,
+    "materialSpecular": 0.12,
+    "textureContrast": 1
   }
 }

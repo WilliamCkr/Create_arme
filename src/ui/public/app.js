@@ -43,8 +43,8 @@ const STEP_META = [
   },
   {
     key: "model",
-    short: "3D Model",
-    title: "Generate 3D Model"
+    short: "3D + Texture",
+    title: "Generate 3D + Step 2 Texture"
   },
   {
     key: "atlas",
@@ -335,6 +335,19 @@ function updateDraftFromStepInputs() {
         targetVertexCount: Number(el.advancedBody.querySelector("#targetVertexCountInput")?.value ?? draft.sf3d?.targetVertexCount ?? -1)
       };
     }
+    draft.step2PixelGradient = {
+      ...(draft.step2PixelGradient ?? {}),
+      edgeBandPx: Number(el.stepOptions.querySelector("#step2EdgeBandPxInput")?.value ?? draft.step2PixelGradient?.edgeBandPx ?? 15),
+      sourceInsetPx: Number(el.stepOptions.querySelector("#step2SourceInsetPxInput")?.value ?? draft.step2PixelGradient?.sourceInsetPx ?? 10),
+      sourceEdgePx: Number(el.stepOptions.querySelector("#step2SourceEdgePxInput")?.value ?? draft.step2PixelGradient?.sourceEdgePx ?? 10),
+      gradientSpanPx: Number(el.stepOptions.querySelector("#step2GradientSpanPxInput")?.value ?? draft.step2PixelGradient?.gradientSpanPx ?? 15),
+      materialBrightness: Number(el.stepOptions.querySelector("#step2MaterialBrightnessInput")?.value ?? draft.step2PixelGradient?.materialBrightness ?? 0.85),
+      materialRoughness: Number(el.stepOptions.querySelector("#step2MaterialRoughnessInput")?.value ?? draft.step2PixelGradient?.materialRoughness ?? 0.88),
+      materialMetallic: Number(el.stepOptions.querySelector("#step2MaterialMetallicInput")?.value ?? draft.step2PixelGradient?.materialMetallic ?? 0.35),
+      materialSpecular: Number(el.stepOptions.querySelector("#step2MaterialSpecularInput")?.value ?? draft.step2PixelGradient?.materialSpecular ?? 0.12),
+      textureContrast: Number(el.stepOptions.querySelector("#step2TextureContrastInput")?.value ?? draft.step2PixelGradient?.textureContrast ?? 1.0)
+    };
+
   } else if (state.currentStepIndex === 2) {
     draft.renderMode = el.advancedBody.querySelector("#renderModeInput")?.value ?? draft.renderMode ?? "turntable_3d";
     draft.angles = parseAngles(el.advancedBody.querySelector("#anglesInput")?.value ?? (draft.angles ?? DEFAULT_ANGLES).join(", "));
@@ -578,6 +591,73 @@ function renderPreview() {
   el.stepCaption.textContent = caption;
 }
 
+
+function step2PixelGradientConfigFromUi(baseConfig = currentConfigFromForm()) {
+  const readNumber = (id, fallback) => {
+    const input = el.stepOptions?.querySelector(`#${id}`);
+    const value = Number(input?.value);
+    return Number.isFinite(value) ? value : fallback;
+  };
+
+  return {
+    ...baseConfig,
+    step2PixelGradient: {
+      ...(baseConfig.step2PixelGradient ?? {}),
+      edgeBandPx: readNumber("step2EdgeBandPxInput", 15),
+      sourceInsetPx: readNumber("step2SourceInsetPxInput", 10),
+      sourceEdgePx: readNumber("step2SourceEdgePxInput", 10),
+      gradientSpanPx: readNumber("step2GradientSpanPxInput", 15),
+      materialBrightness: readNumber("step2MaterialBrightnessInput", 0.85),
+      materialRoughness: readNumber("step2MaterialRoughnessInput", 0.88),
+      materialMetallic: readNumber("step2MaterialMetallicInput", 0.35),
+      materialSpecular: readNumber("step2MaterialSpecularInput", 0.12),
+      textureContrast: readNumber("step2TextureContrastInput", 1.0)
+    }
+  };
+}
+
+function applyStep2EdgePreset(kind) {
+  const values = {
+    thin: { edgeBandPx: 10, sourceInsetPx: 5, sourceEdgePx: 5, gradientSpanPx: 10 },
+    medium: { edgeBandPx: 15, sourceInsetPx: 10, sourceEdgePx: 10, gradientSpanPx: 15 },
+    large: { edgeBandPx: 20, sourceInsetPx: 15, sourceEdgePx: 15, gradientSpanPx: 20 }
+  }[kind];
+
+  if (!values) return;
+
+  const set = (id, value) => {
+    const input = el.stepOptions?.querySelector(`#${id}`);
+    if (input) input.value = value;
+  };
+
+  set("step2EdgeBandPxInput", values.edgeBandPx);
+  set("step2SourceInsetPxInput", values.sourceInsetPx);
+  set("step2SourceEdgePxInput", values.sourceEdgePx);
+  set("step2GradientSpanPxInput", values.gradientSpanPx);
+}
+
+function applyStep2MaterialPreset(kind) {
+  const values = {
+    mat: { brightness: 0.80, roughness: 0.94, metallic: 0.20, specular: 0.08, contrast: 1.10 },
+    balanced: { brightness: 0.85, roughness: 0.88, metallic: 0.35, specular: 0.12, contrast: 1.15 },
+    softMetal: { brightness: 0.90, roughness: 0.78, metallic: 0.50, specular: 0.18, contrast: 1.20 }
+  }[kind];
+
+  if (!values) return;
+
+  const set = (id, value) => {
+    const input = el.stepOptions?.querySelector(`#${id}`);
+    if (input) input.value = value;
+  };
+
+  set("step2MaterialBrightnessInput", values.brightness);
+  set("step2MaterialRoughnessInput", values.roughness);
+  set("step2MaterialMetallicInput", values.metallic);
+  set("step2MaterialSpecularInput", values.specular);
+  set("step2TextureContrastInput", values.contrast);
+}
+
+
 function renderStepOptions() {
   const source = sourceFile();
   const model = inputModelFile();
@@ -603,11 +683,12 @@ function renderStepOptions() {
     `;
   } else if (state.currentStepIndex === 1) {
     const activeModel = model?.exists ? model : null;
+    const step2 = state.formConfig?.step2PixelGradient ?? state.status?.config?.step2PixelGradient ?? {};
     el.stepOptions.innerHTML = `
       <div class="status-grid">
+        <div>Step</div><div>3D mesh + Pixel Gradient texture</div>
         <div>Pipeline</div><div>${escapeHtml(pipelineMeta.label)}</div>
         <div>Mesh provider</div><div>${escapeHtml(hunyuanStatus.meshProvider ?? "placeholder")}</div>
-        <div>Runner configured</div><div>${escapeHtml(hunyuanStatus.runnerConfigured ? "Yes" : "No")}</div>
         <div>Output mesh</div><div>${escapeHtml(displayPath(hunyuanStatus.outputMesh ?? "output/hunyuan_cursed_sword/mesh.glb"))}</div>
         <div>Active model</div><div>${escapeHtml(activeModel?.path ?? "n/a")}</div>
         <div>Size</div><div>${escapeHtml(activeModel ? formatBytes(activeModel.size) : "n/a")}</div>
@@ -615,6 +696,7 @@ function renderStepOptions() {
         <div>Texture bake</div><div>${escapeHtml(isHunyuanPipeline() ? (hunyuanBakeStage.state ?? "Not checked") : "SF3D texture generation")}</div>
         <div>Last run</div><div>${escapeHtml(lastHunyuan?.status ?? "n/a")}</div>
       </div>
+
       <label>
         Pipeline
         <select id="pipelineModeInput">
@@ -622,8 +704,39 @@ function renderStepOptions() {
           <option value="hunyuan_mesh_blender_texture" ${pipelineMode === "hunyuan_mesh_blender_texture" ? "selected" : ""}>${escapeHtml(PIPELINE_MODES.hunyuan_mesh_blender_texture.label)}</option>
         </select>
       </label>
-      <button id="runModelButton" type="button" ${state.busy || !sourceReady() ? "disabled" : ""}>Generate 3D Model</button>
-      <div class="subtle">${escapeHtml(pipelineMeta.description)}</div>
+
+      <div class="step2-native-block">
+        <h3>Pixel Gradient</h3>
+        <label>Edge band px<input id="step2EdgeBandPxInput" type="number" min="0" max="256" step="1" value="${escapeHtml(step2.edgeBandPx ?? 15)}"></label>
+        <label>Source inset px<input id="step2SourceInsetPxInput" type="number" min="0" max="256" step="1" value="${escapeHtml(step2.sourceInsetPx ?? 10)}"></label>
+        <label>Source edge px<input id="step2SourceEdgePxInput" type="number" min="0" max="256" step="1" value="${escapeHtml(step2.sourceEdgePx ?? 10)}"></label>
+        <label>Gradient span px<input id="step2GradientSpanPxInput" type="number" min="0" max="256" step="1" value="${escapeHtml(step2.gradientSpanPx ?? 15)}"></label>
+
+        <div class="preset-row">
+          <button id="step2PresetThinButton" class="secondary small" type="button">Bord fin</button>
+          <button id="step2PresetMediumButton" class="secondary small" type="button">Bord moyen</button>
+          <button id="step2PresetLargeButton" class="secondary small" type="button">Bord large</button>
+        </div>
+      </div>
+
+      <div class="step2-native-block">
+        <h3>Matière / Contraste</h3>
+        <label>Brightness<input id="step2MaterialBrightnessInput" type="number" min="0.30" max="2.00" step="0.01" value="${escapeHtml(step2.materialBrightness ?? 0.85)}"></label>
+        <label>Roughness<input id="step2MaterialRoughnessInput" type="number" min="0.00" max="1.00" step="0.01" value="${escapeHtml(step2.materialRoughness ?? 0.88)}"></label>
+        <label>Metallic<input id="step2MaterialMetallicInput" type="number" min="0.00" max="1.00" step="0.01" value="${escapeHtml(step2.materialMetallic ?? 0.35)}"></label>
+        <label>Specular<input id="step2MaterialSpecularInput" type="number" min="0.00" max="1.00" step="0.01" value="${escapeHtml(step2.materialSpecular ?? 0.12)}"></label>
+        <label>Texture contrast<input id="step2TextureContrastInput" type="number" min="0.50" max="2.50" step="0.05" value="${escapeHtml(step2.textureContrast ?? 1.0)}"></label>
+
+        <div class="preset-row">
+          <button id="step2MaterialMatButton" class="secondary small" type="button">Mat</button>
+          <button id="step2MaterialBalancedButton" class="secondary small" type="button">Équilibré</button>
+          <button id="step2MaterialSoftMetalButton" class="secondary small" type="button">Métal doux</button>
+        </div>
+      </div>
+
+      <button id="runModelButton" type="button" ${state.busy || !sourceReady() ? "disabled" : ""}>Generate 3D Model + Step 2 Texture</button>
+      <button id="retextureStep2Button" class="secondary" type="button" ${state.busy || !modelReady() ? "disabled" : ""}>Retexture Only</button>
+      <div class="subtle">Generate crée le mesh puis applique la Step 2 finale. Retexture réapplique seulement Pixel Gradient sur le mesh existant.</div>
     `;
   } else if (state.currentStepIndex === 2) {
     const draft = state.formConfig ?? state.status?.config ?? {};
@@ -1087,17 +1200,60 @@ function bindStepOptionActions(unlockedStep) {
   const runModelButton = el.stepOptions.querySelector("#runModelButton");
   if (runModelButton) {
     runModelButton.addEventListener("click", () => {
+      updateDraftFromStepInputs();
       const endpoint = currentPipelineMode() === "hunyuan_mesh_blender_texture" ? "/api/run-hunyuan-pipeline" : "/api/run-sf3d";
-      runAction(endpoint, currentConfigFromForm(), "Generate 3D Model", (response) => {
+      const requestConfig = step2PixelGradientConfigFromUi(currentConfigFromForm());
+      runAction(endpoint, requestConfig, "Generate 3D Model + Step 2 Texture", (response) => {
         if (response.activeModelPath) {
           const result = el.advancedBody.querySelector("#sf3dResult") ?? el.advancedBody.querySelector("#hunyuanResult");
           if (result) {
             result.textContent = `Active model: ${response.activeModelPath}`;
           }
         }
-        goToStep(2);
+        refreshStatus();
       });
     });
+  }
+
+  const retextureStep2Button = el.stepOptions.querySelector("#retextureStep2Button");
+  if (retextureStep2Button) {
+    retextureStep2Button.addEventListener("click", () => {
+      updateDraftFromStepInputs();
+      const requestConfig = step2PixelGradientConfigFromUi(currentConfigFromForm());
+      runAction("/api/retexture-step2", requestConfig, "Retexture Step 2", () => {
+        refreshStatus();
+      });
+    });
+  }
+
+  const step2PresetThinButton = el.stepOptions.querySelector("#step2PresetThinButton");
+  if (step2PresetThinButton) {
+    step2PresetThinButton.addEventListener("click", () => applyStep2EdgePreset("thin"));
+  }
+
+  const step2PresetMediumButton = el.stepOptions.querySelector("#step2PresetMediumButton");
+  if (step2PresetMediumButton) {
+    step2PresetMediumButton.addEventListener("click", () => applyStep2EdgePreset("medium"));
+  }
+
+  const step2PresetLargeButton = el.stepOptions.querySelector("#step2PresetLargeButton");
+  if (step2PresetLargeButton) {
+    step2PresetLargeButton.addEventListener("click", () => applyStep2EdgePreset("large"));
+  }
+
+  const step2MaterialMatButton = el.stepOptions.querySelector("#step2MaterialMatButton");
+  if (step2MaterialMatButton) {
+    step2MaterialMatButton.addEventListener("click", () => applyStep2MaterialPreset("mat"));
+  }
+
+  const step2MaterialBalancedButton = el.stepOptions.querySelector("#step2MaterialBalancedButton");
+  if (step2MaterialBalancedButton) {
+    step2MaterialBalancedButton.addEventListener("click", () => applyStep2MaterialPreset("balanced"));
+  }
+
+  const step2MaterialSoftMetalButton = el.stepOptions.querySelector("#step2MaterialSoftMetalButton");
+  if (step2MaterialSoftMetalButton) {
+    step2MaterialSoftMetalButton.addEventListener("click", () => applyStep2MaterialPreset("softMetal"));
   }
 
   const generateAtlasButton = el.stepOptions.querySelector("#generateAtlasButton");
@@ -1322,3 +1478,4 @@ main().catch((error) => {
   setBadge("Offline", "bad");
   appendLocalLog("error", "ui", error.message);
 });
+

@@ -86,7 +86,7 @@
 
   function titleFor(step) {
     if (step === 1) return 'Source Image Preview';
-    if (step === 2) return '3D Model Preview';
+    if (step === 2) return 'Step 2 Pixel Gradient Preview';
     if (step === 3) return 'Weapon Atlas Preview';
     if (step === 4) return 'Arena Export Preview';
     return 'Preview';
@@ -103,10 +103,15 @@
 
     if (step === 2) {
       return '' +
-        '<div class="aof-preview-v2__box">' +
-          '<iframe class="aof-preview-v2__iframe" title="3D Model Preview" src="/glb-preview.html?path=' + encodeURIComponent(paths.model) + '&t=' + Date.now() + '"></iframe>' +
+        '<div class="aof-preview-v2__step2-grid">' +
+          '<div class="aof-preview-v2__step2-tile"><div class="aof-preview-v2__tile-title">Source lock</div><img class="aof-preview-v2__img" src="' + fileUrl('output/hunyuan_cursed_sword/source-lock.png') + '" alt="Source lock"></div>' +
+          '<div class="aof-preview-v2__step2-tile"><div class="aof-preview-v2__tile-title">Layer 1 fill</div><img class="aof-preview-v2__img" src="' + fileUrl('output/hunyuan_cursed_sword/layer1.pixel-gradient-step2.png') + '" alt="Layer 1 fill"></div>' +
+          '<div class="aof-preview-v2__step2-tile"><div class="aof-preview-v2__tile-title">Final composite</div><img class="aof-preview-v2__img" src="' + fileUrl('output/hunyuan_cursed_sword/baked-texture.pixel-gradient-step2.png') + '" alt="Final composite"></div>' +
         '</div>' +
-        '<div class="aof-preview-v2__text">Active model: ' + paths.model + '</div>';
+        '<div class="aof-preview-v2__box aof-preview-v2__box--step2-model">' +
+          '<iframe class="aof-preview-v2__iframe" title="Step 2 3D Preview" src="/glb-preview.html?path=' + encodeURIComponent(paths.model) + '&t=' + Date.now() + '"></iframe>' +
+        '</div>' +
+        '<div class="aof-preview-v2__text">Active Step 2 model: ' + paths.model + '</div>';
     }
 
     if (step === 3) {
@@ -200,7 +205,9 @@
         url.includes('/api/render') ||
         url.includes('/api/build-atlas') ||
         url.includes('/api/generate-atlas') ||
-        url.includes('/api/export-arena-package')
+        url.includes('/api/export-arena-package') ||
+        url.includes('/api/retexture-step2') ||
+        url.includes('/api/run-hunyuan-pipeline')
       ) {
         setTimeout(() => tick(true), 900);
       }

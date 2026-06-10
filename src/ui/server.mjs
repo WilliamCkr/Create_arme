@@ -13,7 +13,8 @@ import {
   resolveHunyuanOutputMeshPath,
   resolveHunyuanReportPath,
   resolveHunyuanTexturedGlbPath,
-  runHunyuanMeshBlenderTexturePipeline
+  runHunyuanMeshBlenderTexturePipeline,
+  runHunyuanStep2TextureOnly
 } from "../lib/hunyuan-pipeline.mjs";
 import { buildWeaponManifest, frameFileNameForAngle } from "../lib/manifest.mjs";
 import { resolveProjectPath } from "../lib/paths.mjs";
@@ -1249,6 +1250,65 @@ async function handleApi(req, res, url) {
       const status = await buildStatus();
       emitStatus(status);
       emitLog("error", "hunyuan", message);
+      sendJson(res, 500, { ok: false, error: message, status });
+    } finally {
+      state.busy = false;
+    }
+    return;
+  }
+
+
+  if (req.method === "POST" && url.pathname === "/api/retexture-step2") {
+    const body = await readRequestBody(req);
+    const config = normalizeUiConfig({
+      ...state.config,
+      ...(body ?? {}),
+      hunyuan: {
+        ...state.config.hunyuan,
+        ...((body ?? {}).hunyuan ?? {})
+      },
+      step2PixelGradient: {
+        ...(state.config.step2PixelGradient ?? {}),
+        ...((body ?? {}).step2PixelGradient ?? {})
+      }
+    });
+
+    await saveUiConfig(config);
+    state.busy = true;
+    beginJob("textureBake");
+    emitLog("log", "step2", "Starting Step 2 Pixel Gradient retexture.");
+
+    try {
+      const result = await runHunyuanStep2TextureOnly({
+        config,
+        emitLog
+      });
+
+      state.lastHunyuan = {
+        status: "done",
+        message: "Step 2 Pixel Gradient retexture completed.",
+        generatedAt: new Date().toISOString(),
+        ...result
+      };
+
+      endJob("textureBake", "done");
+
+      const status = await buildStatus();
+      emitStatus(status);
+      sendJson(res, 200, { ok: true, ...result, status });
+    } catch (error) {
+      endJob("textureBake", "failed");
+
+      const message = error instanceof Error ? error.message : String(error);
+      state.lastHunyuan = {
+        status: "failed",
+        message,
+        generatedAt: new Date().toISOString()
+      };
+
+      const status = await buildStatus();
+      emitStatus(status);
+      emitLog("error", "step2", message);
       sendJson(res, 500, { ok: false, error: message, status });
     } finally {
       state.busy = false;

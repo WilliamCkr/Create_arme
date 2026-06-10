@@ -224,16 +224,46 @@ async function runPlaceholderMeshProvider({ meshPath, sourceImagePath, emitLog }
   };
 }
 
+
 async function runTextureBake({ meshPath, sourceImagePath, config, emitLog }) {
   const blenderBinary = resolveBlenderBinary();
   if (!(await exists(blenderBinary))) {
-    throw new Error(`Blender is required for texture projection/bake but was not found: ${blenderBinary}`);
+    throw new Error(`Blender is required for Step 2 Pixel Gradient bake but was not found: ${blenderBinary}`);
   }
 
-  const scriptPath = resolveBlenderScriptPath("project_texture_to_mesh.py");
+  const outputDir = resolveHunyuanOutputDir(config);
+  await ensureDir(outputDir);
+
+  const scriptPath = resolveBlenderScriptPath("project_texture_with_side_fill.py");
+
+  const sourceCroppedPath = resolveProjectPath("input", "cursed_sword_source_cropped.png");
+  const selectedSourceImagePath = (await exists(sourceCroppedPath)) ? sourceCroppedPath : sourceImagePath;
+
   const outputGlbPath = resolveHunyuanTexturedGlbPath(config);
   const outputTexturePath = resolveHunyuanBakedTexturePath(config);
   const reportPath = resolveHunyuanReportPath(config);
+
+  const step2GlbPath = path.join(outputDir, "textured.pixel-gradient-step2.glb");
+  const step2TexturePath = path.join(outputDir, "baked-texture.pixel-gradient-step2.png");
+  const step2LayerPath = path.join(outputDir, "layer1.pixel-gradient-step2.png");
+
+  const step2 = config?.step2PixelGradient ?? {};
+
+  const edgeBandPx = Number(step2.edgeBandPx ?? 15);
+  const sourceInsetPx = Number(step2.sourceInsetPx ?? 10);
+  const sourceEdgePx = Number(step2.sourceEdgePx ?? 10);
+  const gradientSpanPx = Number(step2.gradientSpanPx ?? 15);
+
+  const materialRoughness = Number(step2.materialRoughness ?? 0.88);
+  const materialMetallic = Number(step2.materialMetallic ?? 0.35);
+  const materialSpecular = Number(step2.materialSpecular ?? 0.12);
+  const textureContrast = Number(step2.textureContrast ?? 1.0);
+
+  emitLog?.("log", "step2", "Running final Pixel Gradient Step 2 texture bake.");
+  emitLog?.("log", "step2", `Source image: ${projectRelative(selectedSourceImagePath)}`);
+  emitLog?.("log", "step2", `Mesh: ${projectRelative(meshPath)}`);
+  emitLog?.("log", "step2", `Edge band=${edgeBandPx}, source inset=${sourceInsetPx}, source edge=${sourceEdgePx}, gradient=${gradientSpanPx}`);
+  emitLog?.("log", "step2", `Material roughness=${materialRoughness}, metallic=${materialMetallic}, specular=${materialSpecular}, texture contrast=${textureContrast}`);
 
   await spawnLoggedProcess({
     source: "blender",
@@ -246,32 +276,92 @@ async function runTextureBake({ meshPath, sourceImagePath, config, emitLog }) {
       "--mesh",
       meshPath,
       "--source-image",
-      sourceImagePath,
+      selectedSourceImagePath,
       "--output-glb",
-      outputGlbPath,
+      step2GlbPath,
       "--output-texture",
-      outputTexturePath,
+      step2TexturePath,
+      "--side-texture",
+      step2LayerPath,
       "--output-report",
       reportPath,
-      "--bake-resolution",
-      String(config?.hunyuan?.textureBakeResolution ?? 2048),
-      "--projection-mode",
-      config?.hunyuan?.projectionMode ?? "smart_uv"
+
+      "--source-face-threshold",
+      "0.30",
+      "--source-face-sign",
+      "1",
+      "--use-source-both-faces",
+
+      "--warp-upscale",
+      "1.00",
+      "--warp-stretch-x",
+      "1.00",
+      "--warp-stretch-y",
+      "1.00",
+      "--warp-contrast",
+      "1.00",
+      "--warp-brightness",
+      "1.00",
+      "--warp-expand-passes",
+      "1",
+      "--warp-alpha-threshold",
+      "0.02",
+      "--lock-alpha-threshold",
+      "0.02",
+
+      "--edge-band-px",
+      String(edgeBandPx),
+      "--source-inset-px",
+      String(sourceInsetPx),
+      "--source-edge-px",
+      String(sourceEdgePx),
+      "--gradient-span-px",
+      String(gradientSpanPx),
+
+      "--material-roughness",
+      String(materialRoughness),
+      "--material-metallic",
+      String(materialMetallic),
+      "--material-specular",
+      String(materialSpecular),
+      "--texture-contrast",
+      String(textureContrast)
     ],
     cwd: resolveProjectPath(),
     emitLog
   });
 
-  if (!(await exists(outputGlbPath))) {
-    throw new Error(`Texture bake did not produce a textured GLB: ${projectRelative(outputGlbPath)}`);
+  if (!(await exists(step2GlbPath))) {
+    throw new Error(`Step 2 bake did not produce a textured GLB: ${projectRelative(step2GlbPath)}`);
+  }
+
+  await copyFile(step2GlbPath, outputGlbPath);
+
+  if (await exists(step2TexturePath)) {
+    await copyFile(step2TexturePath, outputTexturePath);
   }
 
   return {
     texturedGlbPath: outputGlbPath,
     bakedTexturePath: outputTexturePath,
-    reportPath
+    reportPath,
+    step2GlbPath,
+    step2TexturePath,
+    step2LayerPath,
+    selectedSourceImagePath,
+    step2Settings: {
+      edgeBandPx,
+      sourceInsetPx,
+      sourceEdgePx,
+      gradientSpanPx,
+      materialRoughness,
+      materialMetallic,
+      materialSpecular,
+      textureContrast
+    }
   };
 }
+
 
 export async function runHunyuanMeshBlenderTexturePipeline({ config, emitLog }) {
   const outputDir = resolveHunyuanOutputDir(config);
@@ -326,5 +416,49 @@ export async function runHunyuanMeshBlenderTexturePipeline({ config, emitLog }) 
     meshExists: true,
     texturedGlbExists: true,
     activeModelPath: projectRelative(inputModelPath)
+  };
+}
+
+
+export async function runHunyuanStep2TextureOnly({ config, emitLog }) {
+  const outputDir = resolveHunyuanOutputDir(config);
+  const meshPath = resolveHunyuanMeshPath(config);
+  const sourceImagePath = resolveProjectPath(config.sourceImage ?? config.sourceTexture ?? "input/cursed_sword_source.png");
+  const inputModelPath = resolveProjectPath(config.inputModel ?? "input/cursed_sword.glb");
+
+  await ensureDir(outputDir);
+
+  if (!(await exists(meshPath))) {
+    throw new Error(`Step 2 needs a generated mesh first: ${projectRelative(meshPath)}`);
+  }
+
+  const bakeResult = await runTextureBake({
+    meshPath,
+    sourceImagePath,
+    config,
+    emitLog
+  });
+
+  await ensureDir(path.dirname(inputModelPath));
+  await copyFile(bakeResult.texturedGlbPath, inputModelPath);
+
+  const activeModelStats = await stat(inputModelPath);
+
+  emitLog?.("log", "step2", `Retextured active model: ${projectRelative(inputModelPath)}`);
+
+  return {
+    pipelineMode: "step2_pixel_gradient_retexture",
+    meshPath: projectRelative(meshPath),
+    texturedGlbPath: projectRelative(bakeResult.texturedGlbPath),
+    bakedTexturePath: projectRelative(bakeResult.bakedTexturePath),
+    step2GlbPath: projectRelative(bakeResult.step2GlbPath),
+    step2TexturePath: projectRelative(bakeResult.step2TexturePath),
+    step2LayerPath: projectRelative(bakeResult.step2LayerPath),
+    reportPath: projectRelative(bakeResult.reportPath),
+    activeModelPath: projectRelative(inputModelPath),
+    activeModelSize: activeModelStats.size,
+    sourceImage: projectRelative(bakeResult.selectedSourceImagePath),
+    step2Settings: bakeResult.step2Settings,
+    generatedAt: new Date().toISOString()
   };
 }
