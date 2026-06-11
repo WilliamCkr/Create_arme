@@ -1,7 +1,7 @@
 # Arena Bloodline Weapon Atlas Package
 
 Weapon id: cursed_sword
-Generated timestamp: 2026-06-09T23:38:09.152Z
+Generated timestamp: 2026-06-11T19:07:25.332Z
 Source image path: input/cursed_sword_source.png
 Input GLB path: input/cursed_sword.glb
 Render mode: turntable_3d

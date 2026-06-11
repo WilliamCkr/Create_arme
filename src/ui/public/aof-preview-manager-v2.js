@@ -75,25 +75,46 @@
     }
 
     if (step === 3) {
+      const weaponId = SOURCE_IMAGE
+        .split("/")
+        .pop()
+        .replace(/\.[^.]+$/u, "")
+        .replace(/_source_cropped$/iu, "")
+        .replace(/_source$/iu, "")
+        .replace(/_cropped$/iu, "")
+        .replace(/[^a-z0-9_-]+/giu, "_")
+        .replace(/^_+|_+$/g, "")
+        .toLowerCase() || "cursed_sword";
+
+      const packageDir = `arena-export/weapons/${weaponId}`;
+      const packageManifestPath = `${packageDir}/weapon.json`;
+      const packageModelPath = `${packageDir}/model.glb`;
+      const packageTexturePath = `${packageDir}/texture.png`;
+
       return `
         <div class="aof-download-preview">
           <h2>Download Final Object</h2>
-          <p>Objet 3D final généré en Step 2. Aucun atlas, aucune frame, aucun viewer lourd.</p>
+          <p>Download the complete Arena Weapon Package for Stretchy / Arena Bloodline, or download each package file separately.</p>
 
           <div class="aof-download-preview__actions">
-            <a class="aof-download-preview__button" href="/api/file?path=${encodeURIComponent(ACTIVE_MODEL)}&download=1&filename=cursed_sword.glb" download="cursed_sword.glb">
-              Download GLB
+            <a class="aof-download-preview__button" href="/api/download-weapon-package-v1" download="${weaponId}.arena-weapon-package.zip">
+              Download Weapon Package
             </a>
-            <a class="aof-download-preview__button secondary" href="/api/file?path=${encodeURIComponent(ACTIVE_TEXTURE)}&download=1&filename=baked-texture.png" download="baked-texture.png">
-              Download texture PNG
+
+            <a class="aof-download-preview__button secondary" href="/api/file?path=${encodeURIComponent(packageManifestPath)}&download=1&filename=weapon.json" download="weapon.json">
+              Download weapon.json
             </a>
-            <a class="aof-download-preview__button secondary" href="/api/file?path=${encodeURIComponent("output/hunyuan_cursed_sword/textured.pixel-gradient-step2.glb")}&download=1&filename=textured.pixel-gradient-step2.glb" download="textured.pixel-gradient-step2.glb">
-              Download Step 2 GLB backup
+
+            <a class="aof-download-preview__button secondary" href="/api/file?path=${encodeURIComponent(packageModelPath)}&download=1&filename=model.glb" download="model.glb">
+              Download model.glb
+            </a>
+
+            <a class="aof-download-preview__button secondary" href="/api/file?path=${encodeURIComponent(packageTexturePath)}&download=1&filename=texture.png" download="texture.png">
+              Download texture.png
             </a>
           </div>
 
-          <div class="aof-preview-v2__text">Object: ${ACTIVE_MODEL}</div>
-          <div class="aof-preview-v2__text">Texture: ${ACTIVE_TEXTURE}</div>
+          <div class="aof-preview-v2__text">Package source: ${packageDir}</div>
         </div>
       `;
     }
@@ -131,6 +152,11 @@
         lastRenderedStep = null;
         render(true);
       });
+    }
+
+    const rightPanel = document.querySelector(".workflow-right");
+    if (rightPanel) {
+      rightPanel.style.display = step === 3 ? "none" : "";
     }
   }
 

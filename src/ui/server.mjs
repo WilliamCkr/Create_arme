@@ -1300,6 +1300,148 @@ async function handleFileDownload(req, res, url) {
   }
 }
 
+
+function deriveWeaponPackageIdFromConfig(config) {
+  const sourcePath =
+    config?.sourceTexture ??
+    config?.sourceImage ??
+    config?.inputImage ??
+    "input/cursed_sword_source.png";
+
+  const base = path.basename(String(sourcePath), path.extname(String(sourcePath)))
+    .replace(/_source_cropped$/i, "")
+    .replace(/_source$/i, "")
+    .replace(/_cropped$/i, "");
+
+  return sanitizeWeaponPackageId(base || config?.id || "cursed_sword");
+}
+
+function makeWeaponPackageZipCrcTable() {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let c = i;
+    for (let k = 0; k < 8; k += 1) {
+      c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+}
+
+const weaponPackageZipCrcTable = makeWeaponPackageZipCrcTable();
+
+function weaponPackageZipCrc32(buffer) {
+  let crc = 0xffffffff;
+  for (const byte of buffer) {
+    crc = weaponPackageZipCrcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function weaponPackageZipDosDateTime(date = new Date()) {
+  const year = Math.max(1980, date.getFullYear());
+  return {
+    dosTime: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
+    dosDate: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate()
+  };
+}
+
+function createWeaponPackageZip(entries) {
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  const now = new Date();
+
+  for (const entry of entries) {
+    const nameBuffer = Buffer.from(entry.name.replace(/\\/g, "/"), "utf8");
+    const dataBuffer = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(entry.data);
+    const checksum = weaponPackageZipCrc32(dataBuffer);
+    const { dosDate, dosTime } = weaponPackageZipDosDateTime(now);
+
+    const localHeader = Buffer.alloc(30);
+    localHeader.writeUInt32LE(0x04034b50, 0);
+    localHeader.writeUInt16LE(20, 4);
+    localHeader.writeUInt16LE(0, 6);
+    localHeader.writeUInt16LE(0, 8);
+    localHeader.writeUInt16LE(dosTime, 10);
+    localHeader.writeUInt16LE(dosDate, 12);
+    localHeader.writeUInt32LE(checksum, 14);
+    localHeader.writeUInt32LE(dataBuffer.length, 18);
+    localHeader.writeUInt32LE(dataBuffer.length, 22);
+    localHeader.writeUInt16LE(nameBuffer.length, 26);
+    localHeader.writeUInt16LE(0, 28);
+    localParts.push(localHeader, nameBuffer, dataBuffer);
+
+    const centralHeader = Buffer.alloc(46);
+    centralHeader.writeUInt32LE(0x02014b50, 0);
+    centralHeader.writeUInt16LE(20, 4);
+    centralHeader.writeUInt16LE(20, 6);
+    centralHeader.writeUInt16LE(0, 8);
+    centralHeader.writeUInt16LE(0, 10);
+    centralHeader.writeUInt16LE(dosTime, 12);
+    centralHeader.writeUInt16LE(dosDate, 14);
+    centralHeader.writeUInt32LE(checksum, 16);
+    centralHeader.writeUInt32LE(dataBuffer.length, 20);
+    centralHeader.writeUInt32LE(dataBuffer.length, 24);
+    centralHeader.writeUInt16LE(nameBuffer.length, 28);
+    centralHeader.writeUInt16LE(0, 30);
+    centralHeader.writeUInt16LE(0, 32);
+    centralHeader.writeUInt16LE(0, 34);
+    centralHeader.writeUInt16LE(0, 36);
+    centralHeader.writeUInt32LE(0, 38);
+    centralHeader.writeUInt32LE(offset, 42);
+    centralParts.push(centralHeader, nameBuffer);
+
+    offset += localHeader.length + nameBuffer.length + dataBuffer.length;
+  }
+
+  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+  const centralOffset = offset;
+
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(0, 4);
+  end.writeUInt16LE(0, 6);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(centralSize, 12);
+  end.writeUInt32LE(centralOffset, 16);
+  end.writeUInt16LE(0, 20);
+
+  return Buffer.concat([...localParts, ...centralParts, end]);
+}
+
+async function buildArenaWeaponPackageZipForDownload(config) {
+  const { readFile } = await import("node:fs/promises");
+  const weaponId = deriveWeaponPackageIdFromConfig(config);
+  const exportConfig = {
+    ...config,
+    id: weaponId
+  };
+
+  const packageInfo = await exportArenaWeaponPackageV1(exportConfig);
+
+  const entries = [
+    { name: "weapon.json", data: await readFile(resolveProjectPath(packageInfo.manifestPath)) },
+    { name: "model.glb", data: await readFile(resolveProjectPath(packageInfo.modelPath)) },
+    { name: "README.md", data: await readFile(resolveProjectPath(packageInfo.readmePath)) }
+  ];
+
+  if (packageInfo.texturePath) {
+    entries.push({
+      name: "texture.png",
+      data: await readFile(resolveProjectPath(packageInfo.texturePath))
+    });
+  }
+
+  return {
+    id: packageInfo.id ?? weaponId,
+    packageDir: packageInfo.packageDir,
+    zip: createWeaponPackageZip(entries)
+  };
+}
+
+
 async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/status") {
     const status = await buildStatus();
@@ -1514,6 +1656,40 @@ async function handleApi(req, res, url) {
     return;
   }
 
+
+
+  if (req.method === "GET" && url.pathname === "/api/download-weapon-package-v1") {
+    const config = normalizeUiConfig(state.config);
+
+    state.busy = true;
+    beginJob("export");
+    emitLog("log", "export", "Downloading Arena Weapon Package v1 ZIP.");
+
+    try {
+      const result = await buildArenaWeaponPackageZipForDownload(config);
+
+      endJob("export", "done");
+
+      res.writeHead(200, {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="${result.id}.arena-weapon-package.zip"`,
+        "Content-Length": result.zip.length,
+        "Cache-Control": "no-store"
+      });
+      res.end(result.zip);
+
+      emitLog("log", "export", `Arena Weapon Package ZIP downloaded: ${result.packageDir}`);
+      emitStatus(await buildStatus());
+    } catch (error) {
+      endJob("export", "failed");
+      const message = error instanceof Error ? error.message : String(error);
+      emitLog("error", "export", message);
+      sendJson(res, 500, { ok: false, error: message });
+    } finally {
+      state.busy = false;
+    }
+    return;
+  }
 
   if (req.method === "POST" && url.pathname === "/api/export-weapon-package-v1") {
     const body = await readRequestBody(req);
