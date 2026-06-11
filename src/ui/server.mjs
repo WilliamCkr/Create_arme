@@ -834,6 +834,170 @@ async function copySf3dGlbToInput() {
   };
 }
 
+
+/* AOF_ARENA_WEAPON_PACKAGE_V1_START */
+function sanitizeWeaponPackageId(value) {
+  const raw = typeof value === "string" && value.trim() ? value.trim() : "cursed_sword";
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    || "cursed_sword";
+}
+
+function displayNameFromWeaponId(id) {
+  return String(id)
+    .split(/[_-]+/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function packageVector(value, fallback = { x: 0, y: 0, z: 0 }) {
+  return {
+    x: Math.round(toNumber(value?.x, fallback.x) * 1000000) / 1000000,
+    y: Math.round(toNumber(value?.y, fallback.y) * 1000000) / 1000000,
+    z: Math.round(toNumber(value?.z, fallback.z) * 1000000) / 1000000
+  };
+}
+
+function buildPackageGripSocket(config) {
+  const grip = config?.weaponSockets?.grip ?? {};
+  return {
+    kind: "weaponGripJoint",
+    role: "handConnection",
+    space: grip.space ?? "model-local-v1",
+    position: packageVector(grip.position),
+    rotationDeg: packageVector(grip.rotationDeg),
+    source: "Arena Object Forge grip editor",
+    note: "Attach this socket to the skeleton hand weapon joint."
+  };
+}
+
+async function copyPackageFileIfExists(sourcePath, destinationPath) {
+  if (!(await exists(sourcePath))) {
+    return null;
+  }
+
+  await ensureDirExists(path.dirname(destinationPath));
+  await copyFile(sourcePath, destinationPath);
+  return path.relative(projectRoot, destinationPath).replace(/\\/g, "/");
+}
+
+async function exportArenaWeaponPackageV1(config) {
+  const weaponId = sanitizeWeaponPackageId(config.id ?? "cursed_sword");
+  const packageDir = path.join(arenaExportDirRoot, "weapons", weaponId);
+  const modelSourceRel = config.inputModel ?? inputModelRelPath;
+  const modelSourcePath = resolveProjectPath(modelSourceRel);
+  const textureSourcePath = resolveHunyuanBakedTexturePath(config);
+
+  if (!(await exists(modelSourcePath))) {
+    throw new Error(`Weapon model missing: ${path.relative(projectRoot, modelSourcePath)}`);
+  }
+
+  await ensureDirExists(packageDir);
+
+  const modelPackagePath = path.join(packageDir, "model.glb");
+  const texturePackagePath = path.join(packageDir, "texture.png");
+  const manifestPath = path.join(packageDir, "weapon.json");
+  const readmePath = path.join(packageDir, "README.md");
+
+  await copyFile(modelSourcePath, modelPackagePath);
+  const copiedTextureRelPath = await copyPackageFileIfExists(textureSourcePath, texturePackagePath);
+
+  const modelRotation = packageVector(
+    config.weaponModel?.rotationDeg
+      ?? config.weaponSockets?.grip?.previewModelRotationDeg
+      ?? { x: 0, y: 0, z: 0 }
+  );
+
+  const manifest = {
+    schema: "arena.weapon.v1",
+    packageType: "arenaWeapon",
+    packageVersion: 1,
+    id: weaponId,
+    name: config.name ?? displayNameFromWeaponId(weaponId),
+    type: "weapon",
+    createdBy: "Arena Object Forge",
+    exportedAt: new Date().toISOString(),
+    coordinateSystem: {
+      units: "model-units",
+      space: "model-local-v1",
+      axes: {
+        x: "right",
+        y: "up",
+        z: "depth"
+      }
+    },
+    model: {
+      path: "model.glb",
+      format: "glb",
+      sourcePath: path.relative(projectRoot, modelSourcePath).replace(/\\/g, "/"),
+      defaultTransform: {
+        position: { x: 0, y: 0, z: 0 },
+        rotationDeg: modelRotation,
+        scale: { x: 1, y: 1, z: 1 }
+      }
+    },
+    texture: copiedTextureRelPath
+      ? {
+          path: "texture.png",
+          format: "png",
+          sourcePath: path.relative(projectRoot, textureSourcePath).replace(/\\/g, "/")
+        }
+      : null,
+    sockets: {
+      grip: buildPackageGripSocket(config)
+    },
+    compatibility: {
+      stretchy: {
+        importMode: "3dWeaponAttachment",
+        attachSocket: "sockets.grip",
+        targetSkeletonJoint: "hand.weapon"
+      },
+      arenaBloodline: {
+        importMode: "weaponCompilerSource",
+        attachSocket: "sockets.grip",
+        renderSource: "model.path"
+      }
+    }
+  };
+
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+  const readme = [
+    `# ${manifest.name}`,
+    "",
+    "Arena Weapon Package v1.",
+    "",
+    "Files:",
+    "- weapon.json: single source of truth for Stretchy and Arena Bloodline",
+    "- model.glb: final 3D weapon model",
+    "- texture.png: exported texture, when available",
+    "",
+    "Socket:",
+    "- sockets.grip is the hand connection joint used by animation/import tools",
+    ""
+  ].join("\n");
+
+  await writeFile(readmePath, readme, "utf8");
+
+  emitLog("log", "export", `Arena Weapon Package v1 exported: ${path.relative(projectRoot, packageDir)}`);
+
+  return {
+    packageType: "arenaWeapon",
+    schema: "arena.weapon.v1",
+    id: weaponId,
+    packageDir: path.relative(projectRoot, packageDir).replace(/\\/g, "/"),
+    manifestPath: path.relative(projectRoot, manifestPath).replace(/\\/g, "/"),
+    modelPath: path.relative(projectRoot, modelPackagePath).replace(/\\/g, "/"),
+    texturePath: copiedTextureRelPath,
+    readmePath: path.relative(projectRoot, readmePath).replace(/\\/g, "/")
+  };
+}
+/* AOF_ARENA_WEAPON_PACKAGE_V1_END */
+
+
 async function renderFrames(config) {
   const blenderBinary = getBlenderBinary();
   if (!(await exists(blenderBinary))) {
@@ -1344,6 +1508,48 @@ async function handleApi(req, res, url) {
       emitStatus(status);
       emitLog("error", "step2", message);
       sendJson(res, 500, { ok: false, error: message, status });
+    } finally {
+      state.busy = false;
+    }
+    return;
+  }
+
+
+  if (req.method === "POST" && url.pathname === "/api/export-weapon-package-v1") {
+    const body = await readRequestBody(req);
+    const config = normalizeUiConfig({
+      ...state.config,
+      ...(body ?? {}),
+      weaponModel: {
+        ...(state.config.weaponModel ?? {}),
+        ...((body ?? {}).weaponModel ?? {})
+      },
+      weaponSockets: {
+        ...(state.config.weaponSockets ?? {}),
+        ...((body ?? {}).weaponSockets ?? {})
+      }
+    });
+
+    await saveUiConfig(config);
+    state.busy = true;
+    beginJob("export");
+    emitLog("log", "export", "Exporting Arena Weapon Package v1.");
+
+    try {
+      const result = await exportArenaWeaponPackageV1(config);
+      endJob("export", "done");
+      state.lastExport = {
+        ...result,
+        exportedAt: new Date().toISOString()
+      };
+      const status = await buildStatus();
+      emitStatus(status);
+      sendJson(res, 200, { ok: true, ...result, status });
+    } catch (error) {
+      endJob("export", "failed");
+      const message = error instanceof Error ? error.message : String(error);
+      emitLog("error", "export", message);
+      sendJson(res, 500, { ok: false, error: message });
     } finally {
       state.busy = false;
     }

@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { DEFAULT_CONFIG_PATH, loadConfig, resolveOutputDir } from "../lib/config.mjs";
 import { ensureDir } from "../lib/paths.mjs";
+import { resolveBlenderBinary, resolveBlenderSource } from "../lib/blender-paths.mjs";
 
 function printBanner(title) {
   console.log(`\n${title}`);
@@ -13,14 +14,6 @@ function resolveConfigPathFromArgs(argv) {
   }
   const positional = argv.find((value) => !value.startsWith("-"));
   return positional ?? DEFAULT_CONFIG_PATH;
-}
-
-function findBlenderExecutable() {
-  const envPath = process.env.BLENDER_PATH;
-  if (envPath) {
-    return { source: "BLENDER_PATH", command: envPath };
-  }
-  return { source: "PATH", command: "blender" };
 }
 
 function detectNpmVersion() {
@@ -46,16 +39,20 @@ async function main() {
     console.log("npm: unavailable");
   }
 
-  const blender = findBlenderExecutable();
-  const blenderResult = spawnSync(blender.command, ["--version"], {
+  const blenderCommand = resolveBlenderBinary();
+  const blenderResult = spawnSync(blenderCommand, ["--version"], {
     encoding: "utf8",
     windowsHide: true
   });
+
   if (blenderResult.status === 0) {
     const versionLine = blenderResult.stdout.split(/\r?\n/).find(Boolean) ?? "available";
-    console.log(`Blender: ${versionLine} (${blender.source})`);
+    console.log(`Blender: ${versionLine} (${resolveBlenderSource()})`);
+    console.log(`Blender path: ${blenderCommand}`);
   } else {
-    console.warn("Warning: Blender was not found. Headless renders will be unavailable until Blender is installed or BLENDER_PATH is set.");
+    console.warn(`Warning: Blender was not found for Retexture Only.`);
+    console.warn(`Expected path: ${blenderCommand}`);
+    console.warn("Install Blender or set BLENDER_PATH before launching the UI.");
   }
 
   const configPath = resolveConfigPathFromArgs(process.argv.slice(2));

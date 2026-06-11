@@ -95,10 +95,10 @@ function fitModel() {
 
 function resetView() {
   if (!model) return;
-  aofApplyModelRotation();
   fitModel();
-    /* AOF_APPLY_AFTER_LOAD_V1 */
-    aofApplyModelRotation();
+  aofApplyModelRotation();
+  aofEnsureGripMarker();
+  aofApplyGripMarkerTransform();
 }
 
 async function checkFile(url) {
@@ -146,6 +146,9 @@ async function loadModel() {
       });
 
       fitModel();
+      aofApplyModelRotation();
+      aofEnsureGripMarker();
+      void aofLoadGripFromConfig();
       setStatus('Loaded: ' + modelPath);
     },
     undefined,
@@ -165,6 +168,7 @@ document.getElementById('auto').addEventListener('click', (event) => {
 
 window.addEventListener('resize', resize);
 resize();
+canvas.tabIndex = 0;
 
 
 /* AOF_MODEL_DRAG_ROTATION_MINIMAL_START */
@@ -242,6 +246,7 @@ function aofRollModel(delta) {
 function aofPointerDown(event) {
   if (!model) return;
   if (event.target !== canvas) return;
+  if (aofGripHandlePointerDown(event)) return;
 
   aofModelDragState = {
     pointerId: event.pointerId,
@@ -289,6 +294,8 @@ function aofKeyDown(event) {
 
   const key = event.key.toLowerCase();
 
+  if (aofGripHandleKeyDown(event, key)) return;
+
   if (key === "r") {
     aofResetModelRotation();
   }
@@ -309,6 +316,405 @@ function aofKeyDown(event) {
     aofRollModel(15);
   }
 }
+
+
+/* AOF_GRIP_JOINT_EDITOR_V1_START */
+const AOF_GRIP_STORAGE_KEY = `arena-object-forge:glb-preview:weapon-grip:${modelPath}`;
+const AOF_GRIP_SPACE = "model-local-v1";
+
+let aofGripEditMode = false;
+let aofGripMarker = null;
+let aofGripSaveTimer = null;
+
+const aofGripRaycaster = new THREE.Raycaster();
+const aofGripPointer = new THREE.Vector2();
+
+function aofSanitizeVector(value, fallback = { x: 0, y: 0, z: 0 }) {
+  return {
+    x: Math.round(aofFiniteNumber(value?.x, fallback.x) * 1000000) / 1000000,
+    y: Math.round(aofFiniteNumber(value?.y, fallback.y) * 1000000) / 1000000,
+    z: Math.round(aofFiniteNumber(value?.z, fallback.z) * 1000000) / 1000000
+  };
+}
+
+function aofCloneModelRotationDeg() {
+  return {
+    x: aofWrapDeg(aofModelRotationDeg.x),
+    y: aofWrapDeg(aofModelRotationDeg.y),
+    z: aofWrapDeg(aofModelRotationDeg.z)
+  };
+}
+
+function aofDefaultGripData() {
+  return {
+    version: 1,
+    kind: "weaponGripJoint",
+    name: "grip",
+    label: "Grip / hand connection joint",
+    space: AOF_GRIP_SPACE,
+    modelPath,
+    visible: true,
+    position: { x: 0, y: 0, z: 0 },
+    rotationDeg: { x: 0, y: 0, z: 0 }
+  };
+}
+
+function aofLoadGripLocal() {
+  try {
+    const raw = window.localStorage.getItem(AOF_GRIP_STORAGE_KEY);
+    if (!raw) return aofDefaultGripData();
+
+    const parsed = JSON.parse(raw);
+    return {
+      ...aofDefaultGripData(),
+      ...parsed,
+      position: aofSanitizeVector(parsed.position),
+      rotationDeg: aofSanitizeVector(parsed.rotationDeg)
+    };
+  } catch {
+    return aofDefaultGripData();
+  }
+}
+
+let aofGripData = aofLoadGripLocal();
+
+function aofBuildGripPayload() {
+  return {
+    ...aofDefaultGripData(),
+    ...aofGripData,
+    position: aofSanitizeVector(aofGripData.position),
+    rotationDeg: aofSanitizeVector(aofGripData.rotationDeg),
+    previewModelRotationDeg: aofCloneModelRotationDeg(),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function aofSaveGripLocal() {
+  window.localStorage.setItem(AOF_GRIP_STORAGE_KEY, JSON.stringify(aofBuildGripPayload()));
+}
+
+function aofGripVectorText(vector) {
+  const v = aofSanitizeVector(vector);
+  return `x=${v.x.toFixed(4)} y=${v.y.toFixed(4)} z=${v.z.toFixed(4)}`;
+}
+
+function aofUpdateGripInfo(extra = "") {
+  const button = document.getElementById("grip");
+  const info = document.getElementById("gripInfo");
+
+  if (button) {
+    button.textContent = "Place Grip: " + (aofGripEditMode ? "On" : "Off");
+    button.classList.toggle("on", aofGripEditMode);
+  }
+
+  if (info) {
+    const prefix = aofGripEditMode
+      ? "Grip edit ON"
+      : "Grip edit OFF";
+    const suffix = extra ? ` | ${extra}` : "";
+    info.textContent = `${prefix} | ${aofGripVectorText(aofGripData.position)}${suffix}`;
+  }
+}
+
+function aofModelMaxDimension() {
+  if (!model) return 1;
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  return Math.max(size.x, size.y, size.z, 0.001);
+}
+
+function aofCreateGripAxisLine(color, end) {
+  const geometry = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0, 0),
+    end
+  ]);
+  const material = new THREE.LineBasicMaterial({
+    color,
+    depthTest: false,
+    depthWrite: false,
+    transparent: true,
+    opacity: 0.95
+  });
+  const line = new THREE.Line(geometry, material);
+  line.renderOrder = 999;
+  line.userData.aofGripMarker = true;
+  return line;
+}
+
+function aofEnsureGripMarker() {
+  if (!model) return;
+
+  if (aofGripMarker && aofGripMarker.parent === model) {
+    return;
+  }
+
+  if (aofGripMarker?.parent) {
+    aofGripMarker.parent.remove(aofGripMarker);
+  }
+
+  const group = new THREE.Group();
+  group.name = "AOF_weapon_grip_joint";
+  group.userData.aofGripMarker = true;
+
+  const sphere = new THREE.Mesh(
+    new THREE.SphereGeometry(0.045, 24, 16),
+    new THREE.MeshBasicMaterial({
+      color: 0x00ff99,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+      opacity: 0.95
+    })
+  );
+  sphere.name = "AOF_weapon_grip_joint_center";
+  sphere.renderOrder = 1000;
+  sphere.userData.aofGripMarker = true;
+  group.add(sphere);
+
+  group.add(aofCreateGripAxisLine(0xff5555, new THREE.Vector3(0.22, 0, 0)));
+  group.add(aofCreateGripAxisLine(0x55ff88, new THREE.Vector3(0, 0.22, 0)));
+  group.add(aofCreateGripAxisLine(0x55aaff, new THREE.Vector3(0, 0, 0.22)));
+
+  model.add(group);
+  aofGripMarker = group;
+  aofApplyGripMarkerTransform();
+}
+
+function aofApplyGripMarkerTransform() {
+  if (!model || !aofGripMarker) return;
+
+  const position = aofSanitizeVector(aofGripData.position);
+  aofGripMarker.position.set(position.x, position.y, position.z);
+
+  const scale = Math.max(aofModelMaxDimension() * 0.12, 0.001);
+  aofGripMarker.scale.setScalar(scale);
+
+  aofGripMarker.visible = Boolean(aofGripData.visible) || aofGripEditMode;
+  aofUpdateGripInfo();
+}
+
+function aofSetGripPosition(position, source = "manual") {
+  aofGripData = {
+    ...aofGripData,
+    visible: true,
+    position: aofSanitizeVector(position)
+  };
+
+  aofSaveGripLocal();
+  aofEnsureGripMarker();
+  aofApplyGripMarkerTransform();
+  aofUpdateGripInfo(source);
+  aofScheduleGripConfigSave();
+}
+
+async function aofLoadGripFromConfig() {
+  try {
+    const res = await fetch("/api/status", { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const status = await res.json();
+    const grip = status?.config?.weaponSockets?.grip;
+    const modelMeta = status?.config?.weaponModel;
+
+    if (grip?.position) {
+      aofGripData = {
+        ...aofGripData,
+        ...grip,
+        position: aofSanitizeVector(grip.position),
+        rotationDeg: aofSanitizeVector(grip.rotationDeg)
+      };
+      aofSaveGripLocal();
+    }
+
+    if (modelMeta?.rotationDeg) {
+      aofModelRotationDeg = {
+        x: aofWrapDeg(modelMeta.rotationDeg.x),
+        y: aofWrapDeg(modelMeta.rotationDeg.y),
+        z: aofWrapDeg(modelMeta.rotationDeg.z)
+      };
+      aofApplyModelRotation();
+    }
+
+    aofEnsureGripMarker();
+    aofApplyGripMarkerTransform();
+    aofUpdateGripInfo("loaded");
+  } catch (error) {
+    console.warn("Could not load grip config", error);
+    aofEnsureGripMarker();
+    aofApplyGripMarkerTransform();
+    aofUpdateGripInfo("local only");
+  }
+}
+
+async function aofSaveGripToConfig(reason = "manual") {
+  try {
+    const statusRes = await fetch("/api/status", { cache: "no-store" });
+    const status = statusRes.ok ? await statusRes.json() : {};
+    const currentConfig = status?.config ?? {};
+
+    const payload = aofBuildGripPayload();
+
+    const nextConfig = {
+      ...currentConfig,
+      weaponModel: {
+        ...(currentConfig.weaponModel ?? {}),
+        modelPath,
+        coordinateSpace: AOF_GRIP_SPACE,
+        rotationDeg: aofCloneModelRotationDeg(),
+        updatedAt: new Date().toISOString()
+      },
+      weaponSockets: {
+        ...(currentConfig.weaponSockets ?? {}),
+        grip: payload
+      }
+    };
+
+    const saveRes = await fetch("/api/config", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(nextConfig)
+    });
+
+    if (!saveRes.ok) {
+      throw new Error(`HTTP ${saveRes.status}`);
+    }
+
+    aofUpdateGripInfo(`saved ${reason}`);
+  } catch (error) {
+    console.error("Could not save grip config", error);
+    aofUpdateGripInfo("save failed");
+  }
+}
+
+function aofScheduleGripConfigSave() {
+  if (aofGripSaveTimer) {
+    window.clearTimeout(aofGripSaveTimer);
+  }
+
+  aofGripSaveTimer = window.setTimeout(() => {
+    aofGripSaveTimer = null;
+    void aofSaveGripToConfig("auto");
+  }, 450);
+}
+
+function aofToggleGripEditMode() {
+  aofGripEditMode = !aofGripEditMode;
+  aofGripData = {
+    ...aofGripData,
+    visible: true
+  };
+  aofSaveGripLocal();
+  aofEnsureGripMarker();
+  aofApplyGripMarkerTransform();
+  aofUpdateGripInfo(aofGripEditMode ? "click weapon to place" : "locked");
+}
+
+function aofGripHandlePointerDown(event) {
+  if (!aofGripEditMode || !model) return false;
+  if (event.button !== 0) return false;
+
+  const rect = canvas.getBoundingClientRect();
+  aofGripPointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  aofGripPointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+  aofGripRaycaster.setFromCamera(aofGripPointer, camera);
+  const hits = aofGripRaycaster
+    .intersectObject(model, true)
+    .filter((hit) => !hit.object?.userData?.aofGripMarker);
+
+  if (hits.length > 0) {
+    const localPoint = model.worldToLocal(hits[0].point.clone());
+    aofSetGripPosition(localPoint, "placed on mesh");
+  } else {
+    aofUpdateGripInfo("no mesh hit");
+  }
+
+  event.preventDefault();
+  return true;
+}
+
+function aofGripMoveStep(event) {
+  const base = Math.max(aofModelMaxDimension() * 0.01, 0.001);
+  if (event.shiftKey) return base * 5;
+  if (event.altKey) return base * 0.2;
+  return base;
+}
+
+function aofGripHandleKeyDown(event, key) {
+  if (key === "h") {
+    aofToggleGripEditMode();
+    event.preventDefault();
+    return true;
+  }
+
+  if (key === "s" && aofGripEditMode) {
+    void aofSaveGripToConfig("manual");
+    event.preventDefault();
+    return true;
+  }
+
+  if (key === "c" && aofGripEditMode) {
+    const json = JSON.stringify(aofBuildGripPayload(), null, 2);
+    void navigator.clipboard?.writeText(json);
+    aofUpdateGripInfo("copied JSON");
+    event.preventDefault();
+    return true;
+  }
+
+  if (!aofGripEditMode) {
+    return false;
+  }
+
+  const position = aofSanitizeVector(aofGripData.position);
+  const step = aofGripMoveStep(event);
+  let handled = true;
+
+  if (key === "arrowleft") {
+    position.x -= step;
+  } else if (key === "arrowright") {
+    position.x += step;
+  } else if (key === "arrowup") {
+    position.y += step;
+  } else if (key === "arrowdown") {
+    position.y -= step;
+  } else if (key === "pageup") {
+    position.z += step;
+  } else if (key === "pagedown") {
+    position.z -= step;
+  } else if (key === "delete" || key === "backspace") {
+    position.x = 0;
+    position.y = 0;
+    position.z = 0;
+  } else {
+    handled = false;
+  }
+
+  if (!handled) {
+    return false;
+  }
+
+  aofSetGripPosition(position, "keyboard");
+  event.preventDefault();
+  return true;
+}
+
+document.getElementById("grip")?.addEventListener("click", () => {
+  aofToggleGripEditMode();
+  canvas.focus?.();
+  aofUpdateGripInfo(aofGripEditMode ? "click weapon to place grip" : "placement off");
+});
+
+document.getElementById("saveGrip")?.addEventListener("click", () => {
+  void aofSaveGripToConfig("manual");
+});
+
+aofUpdateGripInfo();
+/* AOF_GRIP_JOINT_EDITOR_V1_END */
+
 
 canvas.addEventListener("pointerdown", aofPointerDown);
 canvas.addEventListener("pointermove", aofPointerMove);

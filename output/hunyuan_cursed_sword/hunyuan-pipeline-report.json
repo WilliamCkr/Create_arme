@@ -1,10 +1,10 @@
 {
-  "mesh": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\mesh.glb",
-  "sourceImage": "C:\\Users\\william\\Desktop\\Creation arme\\input\\cursed_sword_source_cropped.png",
-  "outputGlb": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\textured.pixel-gradient-step2.glb",
-  "outputTexture": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\baked-texture.pixel-gradient-step2.png",
-  "sideTexture": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\layer1.pixel-gradient-step2.png",
-  "sourceLockTexture": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\source-lock.png",
+  "mesh": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\mesh.glb",
+  "sourceImage": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\input\\cursed_sword_source_cropped.png",
+  "outputGlb": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\textured.pixel-gradient-step2.glb",
+  "outputTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\baked-texture.pixel-gradient-step2.png",
+  "sideTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\layer1.pixel-gradient-step2.png",
+  "sourceLockTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\source-lock.png",
   "uvName": "ProjectedUV",
   "sourceStats": {
     "width": 479,
@@ -26,18 +26,18 @@
   },
   "compositeMode": "corrected_layer1_above_source",
   "pixelGradientSettings": {
-    "edgeBandPx": 10.0,
+    "edgeBandPx": 20.0,
     "sourceInsetPx": 5.0,
     "sourceEdgePx": 5.0,
-    "gradientSpanPx": 10.0
+    "gradientSpanPx": 20.0
   },
   "textureSettings": {
-    "contrast": 1.1
+    "contrast": 1.0
   },
   "materialSettings": {
-    "roughness": 0.94,
-    "metallic": 0.2,
-    "specular": 0.08
+    "roughness": 0.88,
+    "metallic": 0.35,
+    "specular": 0.12
   },
   "warpSettings": {
     "warpUpscale": 1.0,

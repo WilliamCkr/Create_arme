@@ -63,6 +63,30 @@
       display: block;
     }
 
+    #gripInfo {
+      padding: 8px 10px;
+      border: 1px solid rgba(90, 255, 180, 0.22);
+      border-radius: 10px;
+      background: rgba(5, 22, 15, 0.72);
+      color: #bfffe1;
+      font-size: 12px;
+      pointer-events: auto;
+      max-width: 520px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #grip.on {
+      border-color: rgba(95, 255, 175, 0.65);
+      background: rgba(30, 180, 110, 0.22);
+      color: #dfffea;
+    }
+
+    #saveGrip {
+      border-color: rgba(255, 220, 120, 0.34);
+    }
+
     #error {
       position: absolute;
       left: 20px;
@@ -92,9 +116,12 @@
     <button id="reset">Reset View</button>
     <button id="fit">Fit Model</button>
     <button id="auto">Auto Rotate: Off</button>
+    <button id="grip" title="Click, then click on the weapon to place the grip joint">Place Grip: Off</button>
+    <button id="saveGrip" title="Save grip joint into the UI config">Save Grip</button>
+    <div id="gripInfo">Grip joint: hidden</div>
   </div>
   <canvas id="canvas"></canvas>
   <div id="error"></div>
-  <script type="module" src="/glb-preview.js?v=model-drag-rotation-minimal-v2"></script>
+  <script type="module" src="/glb-preview.js?v=place-grip-button-v1"></script>
 </body>
 </html>

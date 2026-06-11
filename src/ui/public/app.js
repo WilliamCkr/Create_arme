@@ -725,6 +725,14 @@ function renderStepOptions() {
     const objectPath = "input/cursed_sword.glb";
     const texturePath = "output/hunyuan_cursed_sword/baked-texture.png";
     const step2Path = "output/hunyuan_cursed_sword/textured.pixel-gradient-step2.glb";
+    const weaponId = String(state.status?.config?.id ?? "cursed_sword")
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "cursed_sword";
+    const packageDir = `arena-export/weapons/${weaponId}`;
+    const packageManifestPath = `${packageDir}/weapon.json`;
+    const packageModelPath = `${packageDir}/model.glb`;
+    const packageTexturePath = `${packageDir}/texture.png`;
 
     el.stepOptions.innerHTML = `
       <div class="status-grid">
@@ -750,6 +758,33 @@ function renderStepOptions() {
 
         <a class="download-step-button secondary" href="/api/file?path=${encodeURIComponent(step2Path)}&download=1&filename=textured.pixel-gradient-step2.glb" download="textured.pixel-gradient-step2.glb"="textured.pixel-gradient-step2.glb">
           Download Step 2 GLB backup
+        </a>
+
+        <hr>
+
+        <h3>Arena Weapon Package v1</h3>
+        <p class="subtle">
+          Format unique pour Stretchy et Arena Bloodline. Le grip est exporte dans weapon.json.
+        </p>
+
+        <button id="exportWeaponPackageButton" type="button" ${state.busy || !modelReady() ? "disabled" : ""}>
+          Export Weapon Package
+        </button>
+
+        <div id="weaponPackageResult" class="subtle">
+          Target: ${escapeHtml(packageDir)}
+        </div>
+
+        <a class="download-step-button secondary" href="/api/file?path=${encodeURIComponent(packageManifestPath)}&download=1&filename=weapon.json" download="weapon.json">
+          Download weapon.json
+        </a>
+
+        <a class="download-step-button secondary" href="/api/file?path=${encodeURIComponent(packageModelPath)}&download=1&filename=model.glb" download="model.glb">
+          Download package model.glb
+        </a>
+
+        <a class="download-step-button secondary" href="/api/file?path=${encodeURIComponent(packageTexturePath)}&download=1&filename=texture.png" download="texture.png">
+          Download package texture.png
         </a>
       </div>
     `;
@@ -1266,6 +1301,20 @@ function bindStepOptionActions(unlockedStep) {
   const step2MaterialSoftMetalButton = el.stepOptions.querySelector("#step2MaterialSoftMetalButton");
   if (step2MaterialSoftMetalButton) {
     step2MaterialSoftMetalButton.addEventListener("click", () => applyStep2MaterialPreset("softMetal"));
+  }
+
+  const exportWeaponPackageButton = el.stepOptions.querySelector("#exportWeaponPackageButton");
+  if (exportWeaponPackageButton) {
+    exportWeaponPackageButton.addEventListener("click", () => {
+      const requestConfig = currentConfigFromForm();
+      runAction("/api/export-weapon-package-v1", requestConfig, "Export Weapon Package v1", (response) => {
+        const result = el.stepOptions.querySelector("#weaponPackageResult");
+        if (result) {
+          result.textContent = `Exported: ${response.packageDir ?? "arena-export/weapons"}`;
+        }
+        refreshStatus();
+      });
+    });
   }
 
   const generateAtlasButton = el.stepOptions.querySelector("#generateAtlasButton");

@@ -1,0 +1,77 @@
+{
+  "schema": "arena.weapon.v1",
+  "packageType": "arenaWeapon",
+  "packageVersion": 1,
+  "id": "cursed_sword",
+  "name": "Cursed Sword",
+  "type": "weapon",
+  "createdBy": "Arena Object Forge",
+  "exportedAt": "2026-06-11T11:49:18.087Z",
+  "coordinateSystem": {
+    "units": "model-units",
+    "space": "model-local-v1",
+    "axes": {
+      "x": "right",
+      "y": "up",
+      "z": "depth"
+    }
+  },
+  "model": {
+    "path": "model.glb",
+    "format": "glb",
+    "sourcePath": "input/cursed_sword.glb",
+    "defaultTransform": {
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotationDeg": {
+        "x": -0.015,
+        "y": -165.556,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      }
+    }
+  },
+  "texture": {
+    "path": "texture.png",
+    "format": "png",
+    "sourcePath": "output/hunyuan_cursed_sword/baked-texture.png"
+  },
+  "sockets": {
+    "grip": {
+      "kind": "weaponGripJoint",
+      "role": "handConnection",
+      "space": "model-local-v1",
+      "position": {
+        "x": -0.001223,
+        "y": 0.683521,
+        "z": -0.052028
+      },
+      "rotationDeg": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "source": "Arena Object Forge grip editor",
+      "note": "Attach this socket to the skeleton hand weapon joint."
+    }
+  },
+  "compatibility": {
+    "stretchy": {
+      "importMode": "3dWeaponAttachment",
+      "attachSocket": "sockets.grip",
+      "targetSkeletonJoint": "hand.weapon"
+    },
+    "arenaBloodline": {
+      "importMode": "weaponCompilerSource",
+      "attachSocket": "sockets.grip",
+      "renderSource": "model.path"
+    }
+  }
+}
