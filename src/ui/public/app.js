@@ -1137,6 +1137,21 @@ function queueSaveConfig() {
   }, 350);
 }
 
+
+let aofPreviewReloadTimer = null;
+
+function reloadAofPreviewV2Delayed() {
+  if (aofPreviewReloadTimer) {
+    window.clearTimeout(aofPreviewReloadTimer);
+  }
+
+  aofPreviewReloadTimer = window.setTimeout(() => {
+    aofPreviewReloadTimer = null;
+    window.aofReloadPreviewV2?.();
+    window.dispatchEvent(new CustomEvent("aof-preview-v2:reload"));
+  }, 500);
+}
+
 async function runAction(endpoint, body, label, onSuccess) {
   let succeeded = false;
   try {
@@ -1152,6 +1167,7 @@ async function runAction(endpoint, body, label, onSuccess) {
       onSuccess(response);
     }
     await refreshStatus();
+    reloadAofPreviewV2Delayed();
     succeeded = true;
     return response;
   } catch (error) {

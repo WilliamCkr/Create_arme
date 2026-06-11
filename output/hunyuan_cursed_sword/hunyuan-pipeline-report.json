@@ -13,8 +13,8 @@
     "keptPixelsApprox": 280674
   },
   "materialStats": {
-    "sourceFaces": 143872,
-    "sideFillFaces": 5012,
+    "sourceFaces": 143783,
+    "sideFillFaces": 5363,
     "threshold": 0.3,
     "depthAxis": 1,
     "useSourceBothFaces": true,
@@ -26,10 +26,18 @@
   },
   "compositeMode": "corrected_layer1_above_source",
   "pixelGradientSettings": {
-    "edgeBandPx": 20.0,
-    "sourceInsetPx": 15.0,
-    "sourceEdgePx": 15.0,
-    "gradientSpanPx": 20.0
+    "edgeBandPx": 10.0,
+    "sourceInsetPx": 5.0,
+    "sourceEdgePx": 5.0,
+    "gradientSpanPx": 10.0
+  },
+  "textureSettings": {
+    "contrast": 1.1
+  },
+  "materialSettings": {
+    "roughness": 0.94,
+    "metallic": 0.2,
+    "specular": 0.08
   },
   "warpSettings": {
     "warpUpscale": 1.0,

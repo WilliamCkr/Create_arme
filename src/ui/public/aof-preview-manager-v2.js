@@ -7,13 +7,14 @@
   const STEP2_FINAL = "output/hunyuan_cursed_sword/baked-texture.pixel-gradient-step2.png";
 
   let lastRenderedStep = null;
+  let previewRevision = Date.now();
 
   function fileUrl(path) {
-    return "/api/file?path=" + encodeURIComponent(path) + "&t=" + Date.now();
+    return "/api/file?path=" + encodeURIComponent(path) + "&t=" + previewRevision;
   }
 
   function modelUrl() {
-    return "/glb-preview.html?path=" + encodeURIComponent(ACTIVE_MODEL) + "&t=" + Date.now();
+    return "/glb-preview.html?path=" + encodeURIComponent(ACTIVE_MODEL) + "&t=" + previewRevision;
   }
 
   function activeStepNumber() {
@@ -101,6 +102,7 @@
   }
 
   function render(force = false) {
+    if (force) previewRevision = Date.now();
     const center = document.querySelector(".workflow-center");
     if (!center) return;
 
@@ -141,6 +143,17 @@
 
   window.addEventListener("hashchange", () => schedule(true));
   window.addEventListener("popstate", () => schedule(true));
+
+
+  window.aofReloadPreviewV2 = function aofReloadPreviewV2() {
+    lastRenderedStep = null;
+    render(true);
+  };
+
+  window.addEventListener("aof-preview-v2:reload", () => {
+    lastRenderedStep = null;
+    render(true);
+  });
 
   schedule(true);
 })();

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { access, copyFile, mkdir, stat, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, stat, writeFile, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { resolveProjectPath } from "./paths.mjs";
 import { resolveBlenderBinary, resolveBlenderScriptPath } from "./blender-paths.mjs";
@@ -16,6 +16,24 @@ async function exists(filePath) {
 async function ensureDir(dirPath) {
   await mkdir(dirPath, { recursive: true });
   return dirPath;
+}
+
+
+async function copyFileWithWindowsRetry(source, destination, attempts = 12) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await rm(destination, { force: true });
+      await copyFile(source, destination);
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 120 * attempt));
+    }
+  }
+
+  throw lastError;
 }
 
 function projectRelative(filePath) {
@@ -335,10 +353,10 @@ async function runTextureBake({ meshPath, sourceImagePath, config, emitLog }) {
     throw new Error(`Step 2 bake did not produce a textured GLB: ${projectRelative(step2GlbPath)}`);
   }
 
-  await copyFile(step2GlbPath, outputGlbPath);
+  await copyFileWithWindowsRetry(step2GlbPath, outputGlbPath);
 
   if (await exists(step2TexturePath)) {
-    await copyFile(step2TexturePath, outputTexturePath);
+    await copyFileWithWindowsRetry(step2TexturePath, outputTexturePath);
   }
 
   return {
@@ -386,7 +404,7 @@ export async function runHunyuanMeshBlenderTexturePipeline({ config, emitLog }) 
   const bakeResult = await runTextureBake({ meshPath, sourceImagePath, outputDir, config, emitLog });
 
   await ensureDir(path.dirname(inputModelPath));
-  await copyFile(bakeResult.texturedGlbPath, inputModelPath);
+  await copyFileWithWindowsRetry(bakeResult.texturedGlbPath, inputModelPath);
   const activeModelStats = await stat(inputModelPath);
 
   const report = {
@@ -440,7 +458,7 @@ export async function runHunyuanStep2TextureOnly({ config, emitLog }) {
   });
 
   await ensureDir(path.dirname(inputModelPath));
-  await copyFile(bakeResult.texturedGlbPath, inputModelPath);
+  await copyFileWithWindowsRetry(bakeResult.texturedGlbPath, inputModelPath);
 
   const activeModelStats = await stat(inputModelPath);
 

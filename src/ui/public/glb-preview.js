@@ -37,6 +37,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
+controls.enableRotate = false;
 controls.dampingFactor = 0.06;
 controls.target.set(0, 0, 0);
 
@@ -94,8 +95,10 @@ function fitModel() {
 
 function resetView() {
   if (!model) return;
-  model.rotation.set(0, 0, 0);
+  aofApplyModelRotation();
   fitModel();
+    /* AOF_APPLY_AFTER_LOAD_V1 */
+    aofApplyModelRotation();
 }
 
 async function checkFile(url) {
@@ -163,10 +166,166 @@ document.getElementById('auto').addEventListener('click', (event) => {
 window.addEventListener('resize', resize);
 resize();
 
+
+/* AOF_MODEL_DRAG_ROTATION_MINIMAL_START */
+const AOF_MODEL_ROTATION_STORAGE_KEY = `arena-object-forge:glb-preview:minimal-model-rotation:${modelPath}`;
+const AOF_MODEL_ROTATION_DRAG = 0.45;
+const AOF_MODEL_ROTATION_ROLL = 0.55;
+
+let aofModelDragState = null;
+let aofModelRotationDeg = aofLoadModelRotation();
+
+function aofFiniteNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function aofWrapDeg(value) {
+  let v = aofFiniteNumber(value, 0);
+  while (v > 360) v -= 720;
+  while (v < -360) v += 720;
+  return Math.round(v * 1000) / 1000;
+}
+
+function aofLoadModelRotation() {
+  try {
+    const raw = window.localStorage.getItem(AOF_MODEL_ROTATION_STORAGE_KEY);
+    if (!raw) return { x: 0, y: 0, z: 0 };
+    const parsed = JSON.parse(raw);
+    return {
+      x: aofWrapDeg(parsed.x),
+      y: aofWrapDeg(parsed.y),
+      z: aofWrapDeg(parsed.z)
+    };
+  } catch {
+    return { x: 0, y: 0, z: 0 };
+  }
+}
+
+function aofSaveModelRotation() {
+  window.localStorage.setItem(AOF_MODEL_ROTATION_STORAGE_KEY, JSON.stringify(aofModelRotationDeg));
+}
+
+function aofApplyModelRotation() {
+  if (!model) return;
+
+  model.rotation.set(
+    THREE.MathUtils.degToRad(aofModelRotationDeg.x),
+    THREE.MathUtils.degToRad(aofModelRotationDeg.y),
+    THREE.MathUtils.degToRad(aofModelRotationDeg.z),
+    "XYZ"
+  );
+
+  aofSaveModelRotation();
+}
+
+function aofResetModelRotation() {
+  aofModelRotationDeg = { x: 0, y: 0, z: 0 };
+  aofApplyModelRotation();
+}
+
+function aofFlipModelX() {
+  aofModelRotationDeg.x = aofWrapDeg(aofModelRotationDeg.x + 180);
+  aofApplyModelRotation();
+}
+
+function aofFlipModelY() {
+  aofModelRotationDeg.y = aofWrapDeg(aofModelRotationDeg.y + 180);
+  aofApplyModelRotation();
+}
+
+function aofRollModel(delta) {
+  aofModelRotationDeg.z = aofWrapDeg(aofModelRotationDeg.z + delta);
+  aofApplyModelRotation();
+}
+
+function aofPointerDown(event) {
+  if (!model) return;
+  if (event.target !== canvas) return;
+
+  aofModelDragState = {
+    pointerId: event.pointerId,
+    lastX: event.clientX,
+    lastY: event.clientY,
+    mode: event.shiftKey || event.button === 1 ? "roll" : "turn"
+  };
+
+  canvas.setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+}
+
+function aofPointerMove(event) {
+  if (!aofModelDragState) return;
+  if (event.pointerId !== aofModelDragState.pointerId) return;
+
+  const dx = event.clientX - aofModelDragState.lastX;
+  const dy = event.clientY - aofModelDragState.lastY;
+
+  aofModelDragState.lastX = event.clientX;
+  aofModelDragState.lastY = event.clientY;
+
+  if (aofModelDragState.mode === "roll" || event.shiftKey) {
+    aofModelRotationDeg.z = aofWrapDeg(aofModelRotationDeg.z + dx * AOF_MODEL_ROTATION_ROLL);
+  } else {
+    aofModelRotationDeg.y = aofWrapDeg(aofModelRotationDeg.y + dx * AOF_MODEL_ROTATION_DRAG);
+    aofModelRotationDeg.x = aofWrapDeg(aofModelRotationDeg.x + dy * AOF_MODEL_ROTATION_DRAG);
+  }
+
+  aofApplyModelRotation();
+  event.preventDefault();
+}
+
+function aofPointerUp(event) {
+  if (!aofModelDragState) return;
+  if (event.pointerId !== aofModelDragState.pointerId) return;
+
+  canvas.releasePointerCapture?.(event.pointerId);
+  aofModelDragState = null;
+  event.preventDefault();
+}
+
+function aofKeyDown(event) {
+  if (event.target?.matches?.("input, textarea, select")) return;
+
+  const key = event.key.toLowerCase();
+
+  if (key === "r") {
+    aofResetModelRotation();
+  }
+
+  if (key === "f") {
+    aofFlipModelX();
+  }
+
+  if (key === "g") {
+    aofFlipModelY();
+  }
+
+  if (key === "q") {
+    aofRollModel(-15);
+  }
+
+  if (key === "e") {
+    aofRollModel(15);
+  }
+}
+
+canvas.addEventListener("pointerdown", aofPointerDown);
+canvas.addEventListener("pointermove", aofPointerMove);
+canvas.addEventListener("pointerup", aofPointerUp);
+canvas.addEventListener("pointercancel", aofPointerUp);
+window.addEventListener("keydown", aofKeyDown);
+
+document.getElementById("reset")?.addEventListener("click", () => {
+  aofResetModelRotation();
+});
+/* AOF_MODEL_DRAG_ROTATION_MINIMAL_END */
+
 function animate() {
   requestAnimationFrame(animate);
   if (model && autoRotate) {
-    model.rotation.y += 0.008;
+    aofModelRotationDeg.y = aofWrapDeg(aofModelRotationDeg.y + 0.45);
+    aofApplyModelRotation();
   }
   controls.update();
   renderer.render(scene, camera);

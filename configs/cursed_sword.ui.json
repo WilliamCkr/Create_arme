@@ -77,14 +77,14 @@
     "projectionMode": "smart_uv"
   },
   "step2PixelGradient": {
-    "edgeBandPx": 15,
-    "sourceInsetPx": 10,
-    "sourceEdgePx": 10,
-    "gradientSpanPx": 15,
-    "materialBrightness": 0.85,
-    "materialRoughness": 0.88,
-    "materialMetallic": 0.35,
-    "materialSpecular": 0.12,
-    "textureContrast": 1
+    "edgeBandPx": 10,
+    "sourceInsetPx": 5,
+    "sourceEdgePx": 5,
+    "gradientSpanPx": 10,
+    "materialBrightness": 0.8,
+    "materialRoughness": 0.94,
+    "materialMetallic": 0.2,
+    "materialSpecular": 0.08,
+    "textureContrast": 1.1
   }
 }
