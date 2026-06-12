@@ -1087,6 +1087,7 @@ async function exportArenaWeaponPackageV1(config) {
   await copyFile(modelSourcePath, modelPackagePath);
   const copiedTextureRelPath = await copyPackageFileIfExists(textureSourcePath, texturePackagePath);
   await copySimpleSourcePreviewToPackage(config, packageDir);
+  await removeLegacyRenderPreviewFromPackage(packageDir);
 
   const modelRotation = packageVector(
     config.weaponModel?.rotationDeg
@@ -1717,6 +1718,13 @@ function createSimpleStoreZip(entries) {
   return Buffer.concat([localData, centralDir, endRecord]);
 }
 
+
+async function removeLegacyRenderPreviewFromPackage(packageDir) {
+  // AOF_NO_RENDER_FOLDER_IN_PACKAGE_V1
+  await rm(path.join(packageDir, "render"), { recursive: true, force: true }).catch(() => {});
+  await rm(path.join(packageDir, "weapon-render.json"), { force: true }).catch(() => {});
+}
+
 async function buildArenaWeaponPackageZipForDownload(config) {
   const exportConfig = {
     ...config,
@@ -1781,7 +1789,12 @@ async function buildArenaWeaponPackageZipForDownload(config) {
 
   const entries = [];
 
-  for (const file of files) {
+  const packageFiles = files.filter((file) => {
+    // AOF_PACKAGE_FILES_FILTER_NO_RENDER_V1
+    return !String(file.name ?? "").startsWith("render/") && String(file.name ?? "") !== "weapon-render.json";
+  });
+
+  for (const file of packageFiles) {
     if (!file.path || !(await exists(file.path))) {
       if (file.required) {
         throw new Error("Required package file is missing: " + file.name);
