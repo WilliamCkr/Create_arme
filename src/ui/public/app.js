@@ -660,6 +660,7 @@ function renderStepOptions() {
         <div>Path</div><div>${escapeHtml(displayPath(source?.path ?? "input/cursed_sword_source.png"))}</div>
       </div>
       <div class="advanced-actions">
+        <button id="chooseSourceImageButton" class="secondary" type="button" ${state.busy ? "disabled" : ""}>Choose / Replace Source Image</button>
         <button id="refreshSourceButton" class="secondary" type="button" ${state.busy ? "disabled" : ""}>Refresh</button>
         <button id="useImageButton" type="button" ${state.busy || !sourceReady() ? "disabled" : ""}>Use This Image</button>
       </div>
@@ -835,6 +836,7 @@ function renderAdvancedPanels() {
         <div>Modified</div><div>${escapeHtml(source?.exists ? formatTime(source.modifiedTime) : "n/a")}</div>
       </div>
       <div class="advanced-actions">
+        <button class="secondary" type="button" data-action="choose-source-image">Choose / Replace Source Image</button>
         <button class="secondary" type="button" data-action="refresh-source">Refresh source</button>
         <button class="secondary" type="button" data-action="copy-source-path">Copy source path</button>
       </div>
@@ -1152,6 +1154,73 @@ async function refreshStatus() {
   setSaveState("Loaded");
 }
 
+function ensureSourceImageFileInput() {
+  let input = document.getElementById("sourceImageFileInput");
+  if (!input) {
+    input = document.createElement("input");
+    input.id = "sourceImageFileInput";
+    input.type = "file";
+    input.accept = ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
+    input.hidden = true;
+    document.body.appendChild(input);
+  }
+  return input;
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result ?? "")));
+    reader.addEventListener("error", () => reject(reader.error ?? new Error("Could not read selected image.")));
+    reader.readAsDataURL(file);
+  });
+}
+
+function chooseSourceImage() {
+  const input = ensureSourceImageFileInput();
+  input.value = "";
+  input.onchange = () => {
+    const file = input.files?.[0] ?? null;
+    if (file) uploadSourceImageFile(file);
+  };
+  input.click();
+}
+
+async function uploadSourceImageFile(file) {
+  const allowedMimeTypes = new Set(["image/png", "image/jpeg", "image/webp", ""]);
+  const hasAllowedExtension = /\.(png|jpe?g|webp)$/i.test(file.name || "");
+
+  if (!allowedMimeTypes.has(file.type) && !hasAllowedExtension) {
+    const message = "Unsupported image format. Use PNG, JPG, JPEG or WEBP.";
+    setSaveState(message);
+    appendLocalLog("error", "ui", message);
+    return;
+  }
+
+  setBusy(true);
+  setSaveState("Uploading source image...");
+
+  try {
+    const dataUrl = await fileToDataUrl(file);
+    const response = await fetchJson("/api/source-image", {
+      method: "POST",
+      body: JSON.stringify({ fileName: file.name, mimeType: file.type, dataUrl })
+    });
+
+    if (response.status) setStatus(response.status);
+    appendLocalLog("log", "ui", "Source image updated: " + (response.path ?? "input/cursed_sword_source.png"));
+    await refreshStatus();
+    reloadAofPreviewV2Delayed();
+    setSaveState("Source image loaded");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    appendLocalLog("error", "ui", "Source image upload failed: " + message);
+    setSaveState("Source image upload failed");
+  } finally {
+    setBusy(false);
+  }
+}
+
 let saveTimer = null;
 function queueSaveConfig() {
   window.clearTimeout(saveTimer);
@@ -1237,6 +1306,11 @@ function bindStepOptionActions(unlockedStep) {
   const refreshSourceButton = el.stepOptions.querySelector("#refreshSourceButton");
   if (refreshSourceButton) {
     refreshSourceButton.addEventListener("click", refreshStatus);
+  }
+
+  const chooseSourceImageButton = el.stepOptions.querySelector("#chooseSourceImageButton");
+  if (chooseSourceImageButton) {
+    chooseSourceImageButton.addEventListener("click", chooseSourceImage);
   }
 
   const useImageButton = el.stepOptions.querySelector("#useImageButton");
@@ -1405,6 +1479,11 @@ function wireAdvancedInteractions() {
 
     const action = button.dataset.action;
     if (!action) {
+      return;
+    }
+
+    if (action === "choose-source-image") {
+      chooseSourceImage();
       return;
     }
 

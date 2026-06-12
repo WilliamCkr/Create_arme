@@ -35,6 +35,7 @@ const arenaExportDirRoot = resolveProjectPath("arena-export");
 const safeFileRoots = [inputDir, outputDirRoot, configDir, arenaExportDirRoot];
 const uiPublicDir = resolveProjectPath("src", "ui", "public");
 const sourceImageRelPath = "input/cursed_sword_source.png";
+const sourceImageCroppedRelPath = "input/cursed_sword_source_cropped.png";
 const inputModelRelPath = "input/cursed_sword.glb";
 const sf3dGlbRelPath = "output/sf3d_cursed_sword/0/mesh.glb";
 const renderUiStateRelPath = (outputDir) => path.join(outputDir, "render-ui-state.json");
@@ -1333,7 +1334,7 @@ async function readRequestBody(req) {
   let total = 0;
   for await (const chunk of req) {
     total += chunk.length;
-    if (total > 1_000_000) {
+    if (total > 60 * 1024 * 1024) {
       throw new Error("Request body too large.");
     }
     chunks.push(chunk);
@@ -1361,6 +1362,62 @@ function sendText(res, statusCode, body, contentType = "text/plain; charset=utf-
     "Cache-Control": "no-store"
   });
   res.end(body);
+}
+
+function parseUploadedSourceImage(body) {
+  const fileName = String(body?.fileName ?? "source-image");
+  const declaredMimeType = String(body?.mimeType ?? "").toLowerCase();
+  const dataUrl = String(body?.dataUrl ?? "");
+  const match = dataUrl.match(/^data:(image\/(?:png|jpeg|webp));base64,([a-zA-Z0-9+/=\s]+)$/);
+
+  if (!match) throw new Error("Invalid source image data. Use PNG, JPG, JPEG or WEBP.");
+
+  const mimeType = match[1].toLowerCase();
+  const allowedMimeTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+  const allowedByName = /\.(png|jpe?g|webp)$/i.test(fileName);
+  const declaredMimeAllowed = !declaredMimeType || allowedMimeTypes.has(declaredMimeType);
+
+  if (!allowedMimeTypes.has(mimeType) || !declaredMimeAllowed || (!allowedByName && declaredMimeType && declaredMimeType !== mimeType)) {
+    throw new Error("Unsupported source image format. Use PNG, JPG, JPEG or WEBP.");
+  }
+
+  const buffer = Buffer.from(match[2].replace(/\s/g, ""), "base64");
+  if (buffer.length === 0) throw new Error("Selected image is empty.");
+  if (buffer.length > 50 * 1024 * 1024) throw new Error("Selected image is too large.");
+
+  return { fileName, mimeType, buffer };
+}
+
+async function saveUploadedSourceImage(body) {
+  const uploaded = parseUploadedSourceImage(body);
+  const metadata = await sharp(uploaded.buffer, { failOn: "none" }).metadata();
+
+  if (!metadata.width || !metadata.height) throw new Error("Could not read selected image dimensions.");
+
+  await ensureDirExists(inputDir);
+  const normalizedPng = await sharp(uploaded.buffer, { failOn: "none" }).png().toBuffer();
+  await writeFile(resolveProjectPath(sourceImageRelPath), normalizedPng);
+  await rm(resolveProjectPath(sourceImageCroppedRelPath), { force: true });
+
+  const currentConfig = state.config ?? await loadUiConfig();
+  state.config = await saveUiConfig({
+    ...currentConfig,
+    sourceImage: sourceImageRelPath,
+    sourceTexture: sourceImageRelPath
+  });
+
+  emitLog("log", "source-image", "Saved new source image from " + uploaded.fileName + ": " + sourceImageRelPath);
+
+  return {
+    ok: true,
+    path: sourceImageRelPath,
+    savedAs: sourceImageRelPath,
+    width: metadata.width,
+    height: metadata.height,
+    size: normalizedPng.length,
+    originalFileName: uploaded.fileName,
+    mimeType: uploaded.mimeType
+  };
 }
 
 function mimeTypeFor(filePath) {
@@ -1952,6 +2009,21 @@ async function handleApi(req, res, url) {
     return;
   }
 
+
+  if (req.method === "POST" && url.pathname === "/api/source-image") {
+    try {
+      const body = await readRequestBody(req);
+      const result = await saveUploadedSourceImage(body ?? {});
+      const status = await buildStatus();
+      emitStatus(status);
+      sendJson(res, 200, { ...result, status });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emitLog("error", "source-image", message);
+      sendJson(res, 400, { ok: false, error: message });
+    }
+    return;
+  }
 
   if (req.method === "GET" && url.pathname === "/api/status") {
     const status = await buildStatus();
