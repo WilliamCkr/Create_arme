@@ -170,6 +170,110 @@ window.addEventListener('resize', resize);
 resize();
 canvas.tabIndex = 0;
 
+let aofGlbRightPanActive = false;
+
+function installAofGlbPreviewRightClickPanOnly() {
+  // AOF_GLB_PREVIEW_RIGHT_CLICK_PAN_ONLY_V1
+  // This page has its own pointer rotation logic, separate from weapon-viewer.js.
+  // Right click is captured before that logic and used only for camera pan.
+  let lastX = 0;
+  let lastY = 0;
+  let previousAutoRotate = false;
+  let previousEnableDamping = true;
+
+  const panRight = new THREE.Vector3();
+  const panUp = new THREE.Vector3();
+  const panVector = new THREE.Vector3();
+
+  function blockEvent(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+  }
+
+  function panCameraByPixels(dx, dy) {
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(1, rect.width);
+    const height = Math.max(1, rect.height);
+    const distance = Math.max(0.001, camera.position.distanceTo(controls.target));
+    const fov = THREE.MathUtils.degToRad(camera.fov || 35);
+    const viewportHeight = 2 * Math.tan(fov / 2) * distance;
+    const viewportWidth = viewportHeight * (camera.aspect || width / height);
+
+    panRight.setFromMatrixColumn(camera.matrix, 0).multiplyScalar(-dx * viewportWidth / width);
+    panUp.setFromMatrixColumn(camera.matrix, 1).multiplyScalar(dy * viewportHeight / height);
+    panVector.copy(panRight).add(panUp);
+
+    camera.position.add(panVector);
+    controls.target.add(panVector);
+    camera.lookAt(controls.target);
+    camera.updateMatrixWorld();
+  }
+
+  function startRightPan(event) {
+    if (event.button !== 2) {
+      return;
+    }
+
+    blockEvent(event);
+
+    aofGlbRightPanActive = true;
+    lastX = event.clientX;
+    lastY = event.clientY;
+
+    previousAutoRotate = Boolean(autoRotate);
+    previousEnableDamping = Boolean(controls.enableDamping);
+    autoRotate = false;
+    controls.enableDamping = false;
+    controls.update();
+
+    canvas.setPointerCapture?.(event.pointerId);
+  }
+
+  function moveRightPan(event) {
+    if (!aofGlbRightPanActive) {
+      return;
+    }
+
+    blockEvent(event);
+
+    const dx = event.clientX - lastX;
+    const dy = event.clientY - lastY;
+    lastX = event.clientX;
+    lastY = event.clientY;
+
+    panCameraByPixels(dx, dy);
+  }
+
+  function stopRightPan(event) {
+    if (!aofGlbRightPanActive) {
+      return;
+    }
+
+    blockEvent(event);
+
+    aofGlbRightPanActive = false;
+    autoRotate = previousAutoRotate;
+    controls.enableDamping = previousEnableDamping;
+    controls.update();
+    canvas.releasePointerCapture?.(event.pointerId);
+  }
+
+  canvas.addEventListener("contextmenu", blockEvent, true);
+  canvas.addEventListener("pointerdown", startRightPan, true);
+  window.addEventListener("pointermove", moveRightPan, true);
+  window.addEventListener("pointerup", stopRightPan, true);
+  window.addEventListener("pointercancel", stopRightPan, true);
+  canvas.addEventListener("mousedown", (event) => {
+    if (event.button === 2) {
+      blockEvent(event);
+    }
+  }, true);
+}
+
+installAofGlbPreviewRightClickPanOnly();
+
+
 
 /* AOF_MODEL_DRAG_ROTATION_MINIMAL_START */
 const AOF_MODEL_ROTATION_STORAGE_KEY = `arena-object-forge:glb-preview:minimal-model-rotation:${modelPath}`;
@@ -244,6 +348,9 @@ function aofRollModel(delta) {
 }
 
 function aofPointerDown(event) {
+  if (event.button === 2 || aofGlbRightPanActive) {
+    return;
+  }
   if (!model) return;
   if (event.target !== canvas) return;
   if (aofGripHandlePointerDown(event)) return;
@@ -260,6 +367,9 @@ function aofPointerDown(event) {
 }
 
 function aofPointerMove(event) {
+  if (aofGlbRightPanActive) {
+    return;
+  }
   if (!aofModelDragState) return;
   if (event.pointerId !== aofModelDragState.pointerId) return;
 
@@ -729,11 +839,13 @@ document.getElementById("reset")?.addEventListener("click", () => {
 
 function animate() {
   requestAnimationFrame(animate);
-  if (model && autoRotate) {
+  if (!aofGlbRightPanActive && model && autoRotate) {
     aofModelRotationDeg.y = aofWrapDeg(aofModelRotationDeg.y + 0.45);
     aofApplyModelRotation();
   }
-  controls.update();
+  if (!aofGlbRightPanActive) {
+    controls.update();
+  }
   renderer.render(scene, camera);
 }
 animate();

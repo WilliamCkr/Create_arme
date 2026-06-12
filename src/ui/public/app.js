@@ -160,6 +160,31 @@ function sourceReady() {
 function modelReady() {
   return Boolean(inputModelFile()?.exists);
 }
+function fileModifiedTimeMs(file) {
+  const raw = file?.modifiedTime ?? file?.mtime ?? file?.modified ?? null;
+  const time = raw ? Date.parse(raw) : NaN;
+  return Number.isFinite(time) ? time : 0;
+}
+
+function sourceImageIsNewerThanModel() {
+  const source = sourceFile();
+  const model = inputModelFile();
+  if (!source?.exists || !model?.exists) {
+    return false;
+  }
+  return fileModifiedTimeMs(source) > fileModifiedTimeMs(model);
+}
+
+function modelGenerationLocked() {
+  return modelReady() && !sourceImageIsNewerThanModel();
+}
+
+function modelGenerationLockLabel() {
+  if (!modelGenerationLocked()) {
+    return '';
+  }
+  return '3D model already exists for this source image. Change the source image to generate a new mesh, or use Retexture Only.';
+}
 
 function manifestValidation() {
   return manifestFile()?.validation ?? "unchecked";
@@ -668,6 +693,12 @@ function renderStepOptions() {
   } else if (state.currentStepIndex === 1) {
     const activeModel = model?.exists ? model : null;
     const step2 = state.formConfig?.step2PixelGradient ?? state.status?.config?.step2PixelGradient ?? {};
+    const generationLocked = modelGenerationLocked();
+    const generationDisabled = state.busy || !sourceReady() || generationLocked;
+    const generationButtonLabel = generationLocked ? '3D Model Already Exists' : 'Generate 3D Model + Step 2 Texture';
+    const generationHint = generationLocked
+      ? modelGenerationLockLabel()
+      : 'Generate creates the mesh, then applies the Step 2 texture.';
     el.stepOptions.innerHTML = `
       <div class="status-grid">
         <div>Step</div><div>3D mesh + Pixel Gradient texture</div>
@@ -676,6 +707,7 @@ function renderStepOptions() {
         <div>Output mesh</div><div>${escapeHtml(displayPath(hunyuanStatus.outputMesh ?? "output/hunyuan_cursed_sword/mesh.glb"))}</div>
         <div>Active model</div><div>${escapeHtml(activeModel?.path ?? "n/a")}</div>
         <div>Size</div><div>${escapeHtml(activeModel ? formatBytes(activeModel.size) : "n/a")}</div>
+        <div>Generate 3D</div><div>${escapeHtml(generationLocked ? "Locked: model already exists" : "Ready")}</div>
         <div>Mesh stage</div><div>${escapeHtml(isHunyuanPipeline() ? (hunyuanMeshStage.state ?? "Not checked") : (state.status?.tools?.sf3d?.exists ? "Ready" : "Missing"))}</div>
         <div>Texture bake</div><div>${escapeHtml(isHunyuanPipeline() ? (hunyuanBakeStage.state ?? "Not checked") : "SF3D texture generation")}</div>
         <div>Last run</div><div>${escapeHtml(lastHunyuan?.status ?? "n/a")}</div>
@@ -718,9 +750,9 @@ function renderStepOptions() {
         </div>
       </div>
 
-      <button id="runModelButton" type="button" ${state.busy || !sourceReady() ? "disabled" : ""}>Generate 3D Model + Step 2 Texture</button>
+      <button id="runModelButton" type="button" title="${escapeHtml(generationHint)}" ${generationDisabled ? "disabled" : ""}>${escapeHtml(generationButtonLabel)}</button>
       <button id="retextureStep2Button" class="secondary" type="button" ${state.busy || !modelReady() ? "disabled" : ""}>Retexture Only</button>
-      <div class="subtle">Generate crée le mesh puis applique la Step 2 finale. Retexture réapplique seulement Pixel Gradient sur le mesh existant.</div>
+      <div class="subtle">${escapeHtml(generationHint)} Retexture réapplique seulement Pixel Gradient sur le mesh existant.</div>
     `;
   } else if (state.currentStepIndex === 2) {
     const objectPath = "input/cursed_sword.glb";
@@ -877,9 +909,9 @@ function renderAdvancedPanels() {
           <input id="targetVertexCountInput" type="number" step="1" value="${escapeHtml(sf3d.targetVertexCount ?? -1)}" />
         </label>
       </div>
-      <div id="sf3dResult" class="subtle">${escapeHtml(state.status?.lastSf3d?.message ?? "Ready to generate the 3D model.")}</div>
+      <div id="sf3dResult" class="subtle">${escapeHtml(modelGenerationLocked() ? modelGenerationLockLabel() : (state.status?.lastSf3d?.message ?? "Ready to generate the 3D model."))}</div>
       <div class="advanced-actions">
-        <button type="button" data-action="run-sf3d" ${state.busy || !sourceReady() ? "disabled" : ""}>Generate 3D Model</button>
+        <button type="button" data-action="run-sf3d" title="${escapeHtml(modelGenerationLockLabel())}" ${state.busy || !sourceReady() || modelGenerationLocked() ? "disabled" : ""}>${escapeHtml(modelGenerationLocked() ? "3D Model Already Exists" : "Generate 3D Model")}</button>
         <button class="secondary" type="button" data-action="copy-glb">Copy GLB manually</button>
       </div>
     </section>
@@ -1321,6 +1353,11 @@ function bindStepOptionActions(unlockedStep) {
   const runModelButton = el.stepOptions.querySelector("#runModelButton");
   if (runModelButton) {
     runModelButton.addEventListener("click", () => {
+      if (modelGenerationLocked()) {
+        setSaveState(modelGenerationLockLabel());
+        appendLocalLog("warn", "ui", modelGenerationLockLabel());
+        return;
+      }
       updateDraftFromStepInputs();
       const endpoint = currentPipelineMode() === "hunyuan_mesh_blender_texture" ? "/api/run-hunyuan-pipeline" : "/api/run-sf3d";
       const requestConfig = step2PixelGradientConfigFromUi(currentConfigFromForm());
@@ -1531,6 +1568,11 @@ function wireAdvancedInteractions() {
     }
 
     if (action === "run-sf3d") {
+      if (modelGenerationLocked()) {
+        setSaveState(modelGenerationLockLabel());
+        appendLocalLog("warn", "ui", modelGenerationLockLabel());
+        return;
+      }
       await runAction("/api/run-sf3d", currentConfigFromForm(), "Generate 3D Model", (response) => {
         if (response.activeModelPath) {
           const result = el.advancedBody.querySelector("#sf3dResult");
