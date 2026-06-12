@@ -19,6 +19,7 @@ import {
 import { buildWeaponManifest, frameFileNameForAngle } from "../lib/manifest.mjs";
 import { resolveProjectPath } from "../lib/paths.mjs";
 import { validateManifestObject } from "../lib/validation.mjs";
+import sharp from "sharp";
 
 const projectRoot = resolveProjectPath();
 const exampleConfigPath = resolveProjectPath("configs", "cursed_sword.example.json");
@@ -884,6 +885,187 @@ async function copyPackageFileIfExists(sourcePath, destinationPath) {
   return path.relative(projectRoot, destinationPath).replace(/\\/g, "/");
 }
 
+
+async function copySimpleSourcePreviewToPackage(config, packageDir) {
+  // AOF_SIMPLE_SOURCE_PREVIEW_V2_CUTOUT
+  const previewDir = path.join(packageDir, "preview");
+  await mkdir(previewDir, { recursive: true });
+
+  const normalizeMaybe = (value) => String(value ?? "").replaceAll("\\", "/").trim();
+
+  const sourceCandidates = [];
+  const pushCandidate = (value) => {
+    const normalized = normalizeMaybe(value);
+    if (!normalized) return;
+    if (!sourceCandidates.includes(normalized)) {
+      sourceCandidates.push(normalized);
+    }
+  };
+
+  const baseSourceTexture = normalizeMaybe(
+    config?.sourceTexture ??
+    config?.sourceImage ??
+    config?.inputImage ??
+    ""
+  );
+
+  if (baseSourceTexture) {
+    const ext = path.extname(baseSourceTexture);
+    if (ext) {
+      pushCandidate(baseSourceTexture.replace(new RegExp(ext + "$"), "_cropped" + ext));
+      pushCandidate(baseSourceTexture.replace(new RegExp(ext + "$"), "_source_cropped" + ext));
+      pushCandidate(baseSourceTexture.replace(new RegExp(ext + "$"), "_lock" + ext));
+    }
+  }
+
+  pushCandidate(config?.sourceTextureCropped);
+  pushCandidate(config?.sourceImageCropped);
+  pushCandidate(config?.sourceLockImage);
+  pushCandidate(config?.sourceTexture);
+  pushCandidate(config?.sourceImage);
+  pushCandidate(config?.inputImage);
+
+  let selectedSourcePath = null;
+
+  for (const candidate of sourceCandidates) {
+    const absolute = resolveProjectPath(candidate);
+    if (await exists(absolute)) {
+      selectedSourcePath = absolute;
+      break;
+    }
+  }
+
+  if (!selectedSourcePath) {
+    return {
+      ok: false,
+      reason: "no_source_preview_found",
+      tried: sourceCandidates
+    };
+  }
+
+  const sourceLookPath = path.join(previewDir, "source-look.png");
+  const thumbnailPath = path.join(previewDir, "thumbnail.png");
+  const previewManifestPath = path.join(previewDir, "preview.json");
+
+  const input = sharp(selectedSourcePath).ensureAlpha();
+  const metadata = await input.metadata();
+  const width = metadata.width ?? 0;
+  const height = metadata.height ?? 0;
+
+  if (!width || !height) {
+    throw new Error("Invalid source preview image dimensions.");
+  }
+
+  const raw = await input.raw().toBuffer();
+  const channels = 4;
+
+  const samplePixel = (x, y) => {
+    const ix = Math.max(0, Math.min(width - 1, x));
+    const iy = Math.max(0, Math.min(height - 1, y));
+    const index = (iy * width + ix) * channels;
+    return {
+      r: raw[index] ?? 0,
+      g: raw[index + 1] ?? 0,
+      b: raw[index + 2] ?? 0,
+      a: raw[index + 3] ?? 255
+    };
+  };
+
+  const cornerSamples = [
+    samplePixel(0, 0),
+    samplePixel(width - 1, 0),
+    samplePixel(0, height - 1),
+    samplePixel(width - 1, height - 1)
+  ];
+
+  const avg = cornerSamples.reduce(
+    (acc, px) => {
+      acc.r += px.r;
+      acc.g += px.g;
+      acc.b += px.b;
+      return acc;
+    },
+    { r: 0, g: 0, b: 0 }
+  );
+
+  const bg = {
+    r: Math.round(avg.r / cornerSamples.length),
+    g: Math.round(avg.g / cornerSamples.length),
+    b: Math.round(avg.b / cornerSamples.length)
+  };
+
+  const hardThreshold = 42;
+  const softThreshold = 78;
+
+  for (let i = 0; i < raw.length; i += channels) {
+    const r = raw[i];
+    const g = raw[i + 1];
+    const b = raw[i + 2];
+
+    const distance = Math.sqrt(
+      ((r - bg.r) * (r - bg.r)) +
+      ((g - bg.g) * (g - bg.g)) +
+      ((b - bg.b) * (b - bg.b))
+    );
+
+    if (distance <= hardThreshold) {
+      raw[i + 3] = 0;
+    } else if (distance < softThreshold) {
+      const keep = (distance - hardThreshold) / (softThreshold - hardThreshold);
+      raw[i + 3] = Math.max(0, Math.min(255, Math.round(255 * keep)));
+    }
+  }
+
+  const cutoutBuffer = await sharp(raw, {
+    raw: {
+      width,
+      height,
+      channels
+    }
+  })
+    .trim({ background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer();
+
+  await writeFile(sourceLookPath, cutoutBuffer);
+
+  await sharp(cutoutBuffer)
+    .resize(512, 512, {
+      fit: "contain",
+      background: { r: 0, g: 0, b: 0, alpha: 0 }
+    })
+    .png()
+    .toFile(thumbnailPath);
+
+  const trimmedMeta = await sharp(cutoutBuffer).metadata();
+
+  const previewManifest = {
+    schema: "arena.weapon.preview.v1",
+    packageVersion: 2,
+    sourcePath: path.relative(process.cwd(), selectedSourcePath).replace(/\\\\/g, "/"),
+    sourceLookPath: "preview/source-look.png",
+    thumbnailPath: "preview/thumbnail.png",
+    cutout: {
+      method: "corner-color-auto-cutout-v1",
+      backgroundColor: bg,
+      width: trimmedMeta.width ?? null,
+      height: trimmedMeta.height ?? null
+    },
+    note: "Auto-cutout preview generated from AOF source-lock/source image.",
+    exportedAt: new Date().toISOString()
+  };
+
+  await writeFile(previewManifestPath, JSON.stringify(previewManifest, null, 2), "utf8");
+
+  return {
+    ok: true,
+    sourcePath: selectedSourcePath,
+    sourceLookPath,
+    thumbnailPath,
+    previewManifestPath
+  };
+}
+
 async function exportArenaWeaponPackageV1(config) {
   const weaponId = sanitizeWeaponPackageId(config.id ?? "cursed_sword");
   const packageDir = path.join(arenaExportDirRoot, "weapons", weaponId);
@@ -904,6 +1086,7 @@ async function exportArenaWeaponPackageV1(config) {
 
   await copyFile(modelSourcePath, modelPackagePath);
   const copiedTextureRelPath = await copyPackageFileIfExists(textureSourcePath, texturePackagePath);
+  await copySimpleSourcePreviewToPackage(config, packageDir);
 
   const modelRotation = packageVector(
     config.weaponModel?.rotationDeg
@@ -1411,38 +1594,352 @@ function createWeaponPackageZip(entries) {
   return Buffer.concat([...localParts, ...centralParts, end]);
 }
 
+
+function createSimpleStoreZip(entries) {
+  // AOF_SIMPLE_STORE_ZIP_V1
+  const crcTable = createSimpleStoreZip.crcTable ?? (() => {
+    const table = new Uint32Array(256);
+    for (let n = 0; n < 256; n += 1) {
+      let c = n;
+      for (let k = 0; k < 8; k += 1) {
+        c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+      }
+      table[n] = c >>> 0;
+    }
+    createSimpleStoreZip.crcTable = table;
+    return table;
+  })();
+
+  function crc32(buffer) {
+    let c = 0xffffffff;
+    for (const byte of buffer) {
+      c = crcTable[(c ^ byte) & 0xff] ^ (c >>> 8);
+    }
+    return (c ^ 0xffffffff) >>> 0;
+  }
+
+  function dosDateTime(date = new Date()) {
+    const year = Math.max(1980, date.getFullYear());
+    const dosTime =
+      (date.getHours() << 11) |
+      (date.getMinutes() << 5) |
+      Math.floor(date.getSeconds() / 2);
+    const dosDate =
+      ((year - 1980) << 9) |
+      ((date.getMonth() + 1) << 5) |
+      date.getDate();
+    return { dosTime, dosDate };
+  }
+
+  function u16(value) {
+    const b = Buffer.allocUnsafe(2);
+    b.writeUInt16LE(value & 0xffff, 0);
+    return b;
+  }
+
+  function u32(value) {
+    const b = Buffer.allocUnsafe(4);
+    b.writeUInt32LE(value >>> 0, 0);
+    return b;
+  }
+
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  const now = dosDateTime();
+
+  for (const entry of entries) {
+    const name = String(entry.name ?? "").replace(/\\/g, "/");
+    const data = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(entry.data ?? []);
+
+    if (!name || !data.length) continue;
+
+    const nameBuffer = Buffer.from(name, "utf8");
+    const crc = crc32(data);
+    const size = data.length;
+
+    const localHeader = Buffer.concat([
+      u32(0x04034b50),
+      u16(20),
+      u16(0),
+      u16(0),
+      u16(now.dosTime),
+      u16(now.dosDate),
+      u32(crc),
+      u32(size),
+      u32(size),
+      u16(nameBuffer.length),
+      u16(0),
+      nameBuffer
+    ]);
+
+    localParts.push(localHeader, data);
+
+    const centralHeader = Buffer.concat([
+      u32(0x02014b50),
+      u16(20),
+      u16(20),
+      u16(0),
+      u16(0),
+      u16(now.dosTime),
+      u16(now.dosDate),
+      u32(crc),
+      u32(size),
+      u32(size),
+      u16(nameBuffer.length),
+      u16(0),
+      u16(0),
+      u16(0),
+      u16(0),
+      u32(0),
+      u32(offset),
+      nameBuffer
+    ]);
+
+    centralParts.push(centralHeader);
+    offset += localHeader.length + data.length;
+  }
+
+  const centralDir = Buffer.concat(centralParts);
+  const localData = Buffer.concat(localParts);
+
+  const endRecord = Buffer.concat([
+    u32(0x06054b50),
+    u16(0),
+    u16(0),
+    u16(centralParts.length),
+    u16(centralParts.length),
+    u32(centralDir.length),
+    u32(localData.length),
+    u16(0)
+  ]);
+
+  return Buffer.concat([localData, centralDir, endRecord]);
+}
+
 async function buildArenaWeaponPackageZipForDownload(config) {
-  const { readFile } = await import("node:fs/promises");
-  const weaponId = deriveWeaponPackageIdFromConfig(config);
   const exportConfig = {
     ...config,
-    id: weaponId
+    id: config?.id ?? "cursed_sword"
   };
 
   const packageInfo = await exportArenaWeaponPackageV1(exportConfig);
+  const packageDir = packageInfo.packageDir;
 
-  const entries = [
-    { name: "weapon.json", data: await readFile(resolveProjectPath(packageInfo.manifestPath)) },
-    { name: "model.glb", data: await readFile(resolveProjectPath(packageInfo.modelPath)) },
-    { name: "README.md", data: await readFile(resolveProjectPath(packageInfo.readmePath)) }
+  const files = [
+    {
+      name: "weapon.json",
+      path: packageInfo.manifestPath ?? path.join(packageDir, "weapon.json"),
+      required: true
+    },
+    {
+      name: "model.glb",
+      path: packageInfo.modelPath ?? path.join(packageDir, "model.glb"),
+      required: true
+    },
+    {
+      name: "README.md",
+      path: packageInfo.readmePath ?? path.join(packageDir, "README.md"),
+      required: false
+    },
+    {
+      name: "texture.png",
+      path: packageInfo.texturePath ?? path.join(packageDir, "texture.png"),
+      required: false
+    },
+    {
+      name: "render/default.png",
+      path: path.join(packageDir, "render", "default.png"),
+      required: false
+    },
+    {
+      name: "render/capture-full.png",
+      path: path.join(packageDir, "render", "capture-full.png"),
+      required: false
+    },
+    {
+      name: "weapon-render.json",
+      path: path.join(packageDir, "weapon-render.json"),
+      required: false
+    },
+    {
+      name: "preview/source-look.png",
+      path: path.join(packageDir, "preview", "source-look.png"),
+      required: false
+    },
+    {
+      name: "preview/thumbnail.png",
+      path: path.join(packageDir, "preview", "thumbnail.png"),
+      required: false
+    },
+    {
+      name: "preview/preview.json",
+      path: path.join(packageDir, "preview", "preview.json"),
+      required: false
+    }
   ];
 
-  if (packageInfo.texturePath) {
+  const entries = [];
+
+  for (const file of files) {
+    if (!file.path || !(await exists(file.path))) {
+      if (file.required) {
+        throw new Error("Required package file is missing: " + file.name);
+      }
+      continue;
+    }
+
+    const data = await readFile(file.path);
+
+    if (!data) {
+      if (file.required) {
+        throw new Error("Required package file is empty or unreadable: " + file.name);
+      }
+      continue;
+    }
+
     entries.push({
-      name: "texture.png",
-      data: await readFile(resolveProjectPath(packageInfo.texturePath))
+      name: file.name,
+      path: file.path,
+      filePath: file.path,
+      data,
+      content: data,
+      contents: data,
+      buffer: data,
+      bytes: data,
+      value: data
     });
   }
 
+  const zipBuffer = createSimpleStoreZip(entries);
+
   return {
-    id: packageInfo.id ?? weaponId,
-    packageDir: packageInfo.packageDir,
-    zip: createWeaponPackageZip(entries)
+    ...packageInfo,
+    id: packageInfo.id ?? exportConfig.id,
+    packageDir,
+    entries: entries.map((entry) => entry.name),
+    zipBuffer,
+    zip: zipBuffer,
+    buffer: zipBuffer,
+    archiveBuffer: zipBuffer,
+    archive: zipBuffer,
+    data: zipBuffer,
+    content: zipBuffer,
+    contents: zipBuffer,
+    bytes: zipBuffer,
+    payload: zipBuffer
   };
 }
 
 
+
+
+async function saveWeaponViewerSpriteBake(config, body = {}) {
+  const weaponId = deriveWeaponPackageIdFromConfig(config);
+  const packageDir = path.join(arenaExportDirRoot, "weapons", weaponId);
+  const renderDir = path.join(packageDir, "render");
+  const renderPngPath = path.join(renderDir, "default.png");
+  const fullCapturePath = path.join(renderDir, "capture-full.png");
+  const renderJsonPath = path.join(packageDir, "weapon-render.json");
+
+  const dataUrl = typeof body.dataUrl === "string" ? body.dataUrl : "";
+  const match = dataUrl.match(/^data:image\/png;base64,([a-zA-Z0-9+/=]+)$/);
+  if (!match) {
+    throw new Error("Missing or invalid PNG dataUrl.");
+  }
+
+  const fullPng = Buffer.from(match[1], "base64");
+  if (fullPng.length < 64) {
+    throw new Error("Captured PNG is too small.");
+  }
+
+  await ensureDirExists(renderDir);
+  await writeFile(fullCapturePath, fullPng);
+
+  const sharp = await import("sharp");
+  let spriteBuffer = fullPng;
+
+  try {
+    const trimmed = await sharp.default(fullPng)
+      .ensureAlpha()
+      .trim({ background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png()
+      .toBuffer({ resolveWithObject: true });
+
+    if (trimmed?.data?.length > 0) {
+      spriteBuffer = trimmed.data;
+    }
+  } catch (error) {
+    emitLog("warn", "weapon-viewer", "Sprite trim failed, keeping full capture: " + (error instanceof Error ? error.message : String(error)));
+  }
+
+  await writeFile(renderPngPath, spriteBuffer);
+
+  const metadata = await sharp.default(spriteBuffer).metadata();
+  const width = metadata.width ?? null;
+  const height = metadata.height ?? null;
+
+  const payload = {
+    schema: "arena.weapon.render.v1",
+    packageType: "arenaWeaponRender",
+    packageVersion: 2,
+    weaponId,
+    sprite: {
+      path: "render/default.png",
+      format: "png",
+      source: "AOF weapon viewer capture",
+      width,
+      height,
+      fullCapturePath: "render/capture-full.png"
+    },
+    view: {
+      modelSourcePath: body.modelSourcePath ?? null,
+      camera: body.camera ?? null,
+      controls: body.controls ?? null
+    },
+    grip: {
+      mode: "estimated-bottom-center-v1",
+      pivotPx: {
+        x: width ? Math.round(width * 0.5) : null,
+        y: height ? Math.round(height * 0.86) : null
+      },
+      note: "Temporary pivot estimate. Manual grip-to-sprite pivot calibration is the next step."
+    },
+    exportedAt: new Date().toISOString()
+  };
+
+  await writeFile(renderJsonPath, JSON.stringify(payload, null, 2) + "\n", "utf8");
+
+  emitLog("log", "weapon-viewer", "Baked weapon sprite: " + path.relative(projectRoot, renderPngPath));
+  emitLog("log", "weapon-viewer", "Wrote full capture: " + path.relative(projectRoot, fullCapturePath));
+  emitLog("log", "weapon-viewer", "Wrote weapon render manifest: " + path.relative(projectRoot, renderJsonPath));
+
+  return {
+    ok: true,
+    weaponId,
+    spritePath: path.relative(projectRoot, renderPngPath).replace(/\\/g, "/"),
+    fullCapturePath: path.relative(projectRoot, fullCapturePath).replace(/\\/g, "/"),
+    renderManifestPath: path.relative(projectRoot, renderJsonPath).replace(/\\/g, "/")
+  };
+}
+
 async function handleApi(req, res, url) {
+  if (req.method === "POST" && url.pathname === "/api/weapon-viewer/bake-sprite") {
+    const body = await readRequestBody(req);
+    try {
+      const config = state.config ?? await loadUiConfig();
+      const result = await saveWeaponViewerSpriteBake(config, body ?? {});
+      const status = await buildStatus();
+      emitStatus(status);
+      sendJson(res, 200, { ...result, status });
+    } catch (error) {
+      emitLog("error", "weapon-viewer", error instanceof Error ? error.message : String(error));
+      sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
+
   if (req.method === "GET" && url.pathname === "/api/status") {
     const status = await buildStatus();
     sendJson(res, 200, status);
