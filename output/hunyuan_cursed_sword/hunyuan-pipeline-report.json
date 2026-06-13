@@ -1,34 +1,34 @@
 {
-  "mesh": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\mesh.glb",
-  "sourceImage": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\input\\cursed_sword_source_cropped.png",
-  "outputGlb": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\textured.pixel-gradient-step2.glb",
-  "outputTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\baked-texture.pixel-gradient-step2.png",
-  "sideTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\layer1.pixel-gradient-step2.png",
-  "sourceLockTexture": "C:\\Users\\william.choukroun\\Documents\\Espace travail local\\TMP\\Arena Arme\\output\\hunyuan_cursed_sword\\source-lock.png",
+  "mesh": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\mesh.glb",
+  "sourceImage": "C:\\Users\\william\\Desktop\\Creation arme\\input\\cursed_sword_source.png",
+  "outputGlb": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\textured.pixel-gradient-step2.glb",
+  "outputTexture": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\baked-texture.pixel-gradient-step2.png",
+  "sideTexture": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\layer1.pixel-gradient-step2.png",
+  "sourceLockTexture": "C:\\Users\\william\\Desktop\\Creation arme\\output\\hunyuan_cursed_sword\\source-lock.png",
   "uvName": "ProjectedUV",
   "sourceStats": {
-    "width": 479,
-    "height": 1448,
-    "removedWhitePixels": 412918,
-    "keptPixelsApprox": 280674
+    "width": 1024,
+    "height": 1536,
+    "removedWhitePixels": 1146017,
+    "keptPixelsApprox": 426847
   },
   "materialStats": {
-    "sourceFaces": 143783,
-    "sideFillFaces": 5363,
+    "sourceFaces": 326348,
+    "sideFillFaces": 87660,
     "threshold": 0.3,
     "depthAxis": 1,
     "useSourceBothFaces": true,
     "sourceFaceSign": 1
   },
   "targetTextureSize": {
-    "width": 479,
-    "height": 1448
+    "width": 1024,
+    "height": 1536
   },
   "compositeMode": "corrected_layer1_above_source",
   "pixelGradientSettings": {
     "edgeBandPx": 20.0,
-    "sourceInsetPx": 5.0,
-    "sourceEdgePx": 5.0,
+    "sourceInsetPx": 15.0,
+    "sourceEdgePx": 15.0,
     "gradientSpanPx": 20.0
   },
   "textureSettings": {

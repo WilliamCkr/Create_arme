@@ -78,8 +78,8 @@
   },
   "step2PixelGradient": {
     "edgeBandPx": 20,
-    "sourceInsetPx": 5,
-    "sourceEdgePx": 5,
+    "sourceInsetPx": 15,
+    "sourceEdgePx": 15,
     "gradientSpanPx": 20,
     "materialBrightness": 0.85,
     "materialRoughness": 0.88,
@@ -91,11 +91,11 @@
     "modelPath": "input/cursed_sword.glb",
     "coordinateSpace": "model-local-v1",
     "rotationDeg": {
-      "x": -0.015,
-      "y": -165.556,
+      "x": -4.965,
+      "y": -327.556,
       "z": 0
     },
-    "updatedAt": "2026-06-11T11:35:12.829Z"
+    "updatedAt": "2026-06-12T22:16:12.953Z"
   },
   "weaponSockets": {
     "grip": {
@@ -107,9 +107,9 @@
       "modelPath": "input/cursed_sword.glb",
       "visible": true,
       "position": {
-        "x": -0.001223,
-        "y": 0.683521,
-        "z": -0.052028
+        "x": -0.007758,
+        "y": -0.302654,
+        "z": 0.049636
       },
       "rotationDeg": {
         "x": 0,
@@ -117,11 +117,12 @@
         "z": 0
       },
       "previewModelRotationDeg": {
-        "x": -0.015,
-        "y": -165.556,
+        "x": -4.965,
+        "y": -327.556,
         "z": 0
       },
-      "updatedAt": "2026-06-11T11:35:12.829Z"
+      "updatedAt": "2026-06-12T22:16:12.953Z"
     }
-  }
+  },
+  "sourceImage": "input/cursed_sword_source.png"
 }
